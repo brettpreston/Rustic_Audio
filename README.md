@@ -1,6 +1,6 @@
 # Rustic_Audio
 
-Rustic_Audio is a voice recorder application with a DSP effects chain for audio cleaning and a small file Opus encoder. This project is licensed under the GPL-3.0 License.
+Rustic_Audio is a voice recorder application with a DSP effects chain for audio cleaning and an Opus encoder for outputing small audio files. This project is licensed under the GPL-3.0 License.
 
 ## Features
 
@@ -20,7 +20,7 @@ The DSP effects chain includes the following effects:
      - `lowpass_freq`: Frequency threshold in Hz (1000.0 - 20000.0 Hz)
 
 2. **Spectral Gate**
-   - Reduces noise by applying a threshold to the frequency spectrum.
+   - Fast Fourier Transform (FFT) noise reduction.
      - `threshold_db`: Threshold in dB (-50.0 - 24.0 dB)
 
 3. **Noise Gate**
