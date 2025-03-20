@@ -1,12 +1,12 @@
 # Rustic_Audio
 
-Rustic_Audio is a voice recorder application with a DSP effects chain for audio cleaning and an Opus encoder for outputing small audio files. This project is licensed under the GPL-3.0 License.
+Rustic_Audio is a voice recorder application with a DSP effects chain for audio cleaning, and an Opus encoder for outputing small audio files. This project is licensed under the GPL-3.0 License.
 
 ## Features
 
 - Record audio from the default input device
 - Apply DSP effects for audio cleaning
-- Encode processed audio to Opus format
+- Encode processed audio to Opus
 - Playback original and processed audio
 
 ## DSP Effects and Settings
@@ -26,9 +26,9 @@ The DSP effects chain includes the following effects:
 3. **Noise Gate**
    - Reduces noise by applying a threshold to the amplitude.
      - `amplitude_threshold_db`: Threshold in dB (-60.0 - 0.0 dB)
-     - `amplitude_attack_ms`: Attack time in milliseconds (0.1 - 100.0 ms)
-     - `amplitude_release_ms`: Release time in milliseconds (1.0 - 1000.0 ms)
-     - `amplitude_lookahead_ms`: Lookahead time in milliseconds (0.0 - 20.0 ms)
+     - `amplitude_attack_ms`: Attack time (0.1 - 100.0 ms)
+     - `amplitude_release_ms`: Release time (1.0 - 1000.0 ms)
+     - `amplitude_lookahead_ms`: Lookahead time (0.0 - 20.0 ms)
 
 4. **Gain Booster**
    - Increases the amplitude of the audio signal.
