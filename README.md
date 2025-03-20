@@ -1,6 +1,6 @@
-# Rustio
+# Rustic_Audio
 
-Rustio is a voice recorder application with a DSP effects chain for audio cleaning and a small file Opus encoder. This project is licensed under the GPL-3.0 License.
+Rustic_Audio is a voice recorder application with a DSP effects chain for audio cleaning and a small file Opus encoder. This project is licensed under the GPL-3.0 License.
 
 ## Features
 
