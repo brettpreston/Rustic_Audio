@@ -12,20 +12,22 @@ pub fn record_audio(file_path: &str, is_recording_flag: Arc<AtomicBool>) -> Resu
 
     let sample_format = config.sample_format();
     let channels = config.channels();
-    let sample_rate = config.sample_rate();
+    let input_sample_rate = config.sample_rate();
     let config = config.config();
 
     println!("Recording with: format={:?}, rate={}, channels={}", 
-             sample_format, sample_rate.0, channels);
+             sample_format, input_sample_rate.0, channels);
 
+    // Create a temporary file for initial recording
+    let temp_file = "temp_recording.wav";
     let spec = hound::WavSpec {
         channels,
-        sample_rate: sample_rate.0,
+        sample_rate: input_sample_rate.0,
         bits_per_sample: 16,
         sample_format: hound::SampleFormat::Int,
     };
     
-    let writer = Arc::new(Mutex::new(Some(hound::WavWriter::create(file_path, spec)?)));
+    let writer = Arc::new(Mutex::new(Some(hound::WavWriter::create(temp_file, spec)?)));
     let samples_written = Arc::new(Mutex::new(0u32));
 
     let stream = match sample_format {
@@ -141,9 +143,77 @@ pub fn record_audio(file_path: &str, is_recording_flag: Arc<AtomicBool>) -> Resu
         println!("Total samples recorded: {}", *count);
     }
     
-    if let Ok(metadata) = std::fs::metadata(file_path) {
+    if let Ok(metadata) = std::fs::metadata(temp_file) {
         println!("Output file size: {} bytes", metadata.len());
     }
+
+    // Save the original recording first
+    std::fs::copy(temp_file, "original.wav")?;
+    
+    // Read the temporary file for processing
+    let mut reader = hound::WavReader::open(temp_file)?;
+    let input_spec = reader.spec();
+    
+    // Create the final 48kHz mono file
+    let output_spec = hound::WavSpec {
+        channels: 1, // Mono
+        sample_rate: 48000,
+        bits_per_sample: 16,
+        sample_format: hound::SampleFormat::Int,
+    };
+    
+    let mut writer = hound::WavWriter::create(file_path, output_spec)?;
+    
+    // Read all samples into memory
+    let samples: Vec<i16> = reader.samples::<i16>()
+        .filter_map(Result::ok)
+        .collect();
+    
+    // Convert to mono if stereo (take left channel)
+    let mono_samples: Vec<i16> = if input_spec.channels == 2 {
+        samples.chunks(2)
+            .map(|chunk| chunk[0]) // Take left channel
+            .collect()
+    } else {
+        samples
+    };
+    
+    // Resample to 48kHz if needed
+    if input_spec.sample_rate != 48000 {
+        let mono_float: Vec<f32> = mono_samples.iter()
+            .map(|&s| s as f32 / 32768.0)
+            .collect();
+            
+        // Simple linear interpolation resampling
+        let input_duration = mono_float.len() as f32 / input_spec.sample_rate as f32;
+        let output_len = (input_duration * 48000.0) as usize;
+        let scale = (mono_float.len() - 1) as f32 / (output_len - 1) as f32;
+        
+        for i in 0..output_len {
+            let pos = i as f32 * scale;
+            let index = pos as usize;
+            let frac = pos - index as f32;
+            
+            let sample = if index + 1 < mono_float.len() {
+                mono_float[index] * (1.0 - frac) + mono_float[index + 1] * frac
+            } else {
+                mono_float[index]
+            };
+            
+            let sample_i16 = (sample * 32767.0).min(32767.0).max(-32768.0) as i16;
+            writer.write_sample(sample_i16)?;
+        }
+    } else {
+        // No resampling needed, just write mono samples
+        for sample in mono_samples {
+            writer.write_sample(sample)?;
+        }
+    }
+    
+    writer.finalize()?;
+    
+    // Clean up temporary file
+    std::fs::remove_file(temp_file)?;
 
     Ok(())
 }

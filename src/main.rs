@@ -2,6 +2,7 @@ mod record;
 mod playback;
 mod dsp;
 mod opus_encoder;
+mod opus_playback;
 
 use eframe::egui;
 use record::record_audio;
@@ -11,8 +12,8 @@ use std::sync::Arc;
 use std::thread;
 use std::sync::Mutex;
 use crate::dsp::AudioProcessor;
-use hound;
 use opus_encoder::OpusEncoder;
+use opus_playback::playback_opus;
 
 struct AudioFileInfo {
     file_size: u64,
@@ -218,7 +219,17 @@ impl eframe::App for AudioApp {
                             if let Err(e) = opus_encoder.encode_wav_to_opus("processed.wav", "processed.opus") {
                                 info.last_message = format!("Error encoding to Opus: {:?}", e);
                             } else {
-                                info.last_message = "Processing and Opus encoding completed successfully".to_string();
+                                // Update file info after successful encoding
+                                match opus_playback::get_opus_info("processed.opus") {
+                                    Ok((size, duration)) => {
+                                        info.file_size = size;
+                                        info.duration = duration;
+                                        info.last_message = "Processing and Opus encoding completed successfully".to_string();
+                                    }
+                                    Err(e) => {
+                                        info.last_message = format!("Error getting Opus file info: {:?}", e);
+                                    }
+                                }
                             }
                         }
                     }));
@@ -236,7 +247,7 @@ impl eframe::App for AudioApp {
                         let audio_info = Arc::clone(&self.audio_info);
                         self.is_playing.store(true, Ordering::Relaxed);
                         self.playback_thread = Some(thread::spawn(move || {
-                            match playback_audio("processed.wav", is_playing) {
+                            match playback_opus("processed.opus", is_playing) {
                                 Ok(_) => {
                                     let mut info = audio_info.lock().unwrap();
                                     info.last_message = "Processed playback completed successfully".to_string();
@@ -259,14 +270,7 @@ impl eframe::App for AudioApp {
                         let audio_info = Arc::clone(&self.audio_info);
                         self.is_playing_original.store(true, Ordering::Relaxed);
                         self.playback_original_thread = Some(thread::spawn(move || {
-                            // Try to play output.wav first, if it exists
-                            let file_to_play = if std::path::Path::new("output.wav").exists() {
-                                "output.wav"
-                            } else {
-                                "processed.wav" // Fallback to processed.wav
-                            };
-
-                            match playback_audio(file_to_play, is_playing) {
+                            match playback_audio("original.wav", is_playing) {
                                 Ok(_) => {
                                     let mut info = audio_info.lock().unwrap();
                                     info.last_message = "Original playback completed successfully".to_string();
