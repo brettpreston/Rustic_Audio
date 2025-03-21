@@ -17,6 +17,12 @@ pub struct AudioProcessor {
     pub limiter_lookahead_ms: f32,
     pub lowpass_freq: f32,
     pub highpass_freq: f32,
+    // Add toggle flags for each effect
+    pub filters_enabled: bool,
+    pub spectral_gate_enabled: bool,
+    pub amplitude_gate_enabled: bool,
+    pub gain_boost_enabled: bool,
+    pub limiter_enabled: bool,
 }
 //AudioProcessor Defult 
 impl AudioProcessor {
@@ -34,6 +40,12 @@ impl AudioProcessor {
             limiter_lookahead_ms: 5.0,
             lowpass_freq: 10000.0,  // Changed default lowpass
             highpass_freq: 75.0,
+            // Initialize all effects as enabled by default
+            filters_enabled: true,
+            spectral_gate_enabled: true,
+            amplitude_gate_enabled: true,
+            gain_boost_enabled: true,
+            limiter_enabled: true,
         }
     }
 
@@ -50,12 +62,22 @@ impl AudioProcessor {
             reader.samples::<i16>().map(|s| s.unwrap() as f32 / 32768.0).collect()
         };
         
-        // Apply processing in order
-        self.apply_filters(&mut samples);         // 1. Filters
-        self.apply_noise_gate(&mut samples);      // 2. Spectral Gate
-        self.apply_amplitude_gate(&mut samples);  // 3. Amplitude Gate
-        self.apply_gain_boost(&mut samples);      // 4. Gain Boost
-        self.apply_lookahead_limiter(&mut samples); // 5. Limiter
+        // Apply processing in order, but only if enabled
+        if self.filters_enabled {
+            self.apply_filters(&mut samples);         // 1. Filters
+        }
+        if self.spectral_gate_enabled {
+            self.apply_noise_gate(&mut samples);      // 2. Spectral Gate
+        }
+        if self.amplitude_gate_enabled {
+            self.apply_amplitude_gate(&mut samples);  // 3. Amplitude Gate
+        }
+        if self.gain_boost_enabled {
+            self.apply_gain_boost(&mut samples);      // 4. Gain Boost
+        }
+        if self.limiter_enabled {
+            self.apply_lookahead_limiter(&mut samples); // 5. Limiter
+        }
         
         // Write output file - use the SAME spec as input
         let spec = hound::WavSpec {

@@ -69,89 +69,126 @@ impl eframe::App for AudioApp {
                 ui.heading("Audio Processor");
                 ui.add_space(20.0);
 
-            // 1. Filters
-            ui.group(|ui| {
-                ui.heading("Filters");
+                // Add effect toggles section
+                ui.group(|ui| {
+                    ui.heading("Effect Toggles");
+                    ui.horizontal(|ui| {
+                        ui.checkbox(&mut self.processor.filters_enabled, "Filters");
+                        ui.checkbox(&mut self.processor.spectral_gate_enabled, "Spectral Gate");
+                        ui.checkbox(&mut self.processor.amplitude_gate_enabled, "Noise Gate");
+                        ui.checkbox(&mut self.processor.gain_boost_enabled, "Gain Boost");
+                        ui.checkbox(&mut self.processor.limiter_enabled, "Limiter");
+                    });
+                });
                 
-                ui.horizontal(|ui| {
-                    ui.label("Highpass:");
-                    ui.add(egui::Slider::new(
-                        &mut self.processor.highpass_freq,
-                        20.0..=1000.0
-                    ).suffix(" Hz")
-                    .logarithmic(true));
+                ui.add_space(10.0);
+
+                // 1. Filters
+                ui.group(|ui| {
+                    ui.horizontal(|ui| {
+                        ui.heading("Filters");
+                        ui.checkbox(&mut self.processor.filters_enabled, "Enabled");
+                    });
+                    
+                    ui.add_enabled_ui(self.processor.filters_enabled, |ui| {
+                        ui.horizontal(|ui| {
+                            ui.label("Highpass:");
+                            ui.add(egui::Slider::new(
+                                &mut self.processor.highpass_freq,
+                                20.0..=1000.0
+                            ).suffix(" Hz")
+                            .logarithmic(true));
+                        });
+
+                        ui.horizontal(|ui| {
+                            ui.label("Lowpass:");
+                            ui.add(egui::Slider::new(
+                                &mut self.processor.lowpass_freq,
+                                1000.0..=20000.0
+                            ).suffix(" Hz")
+                            .logarithmic(true));
+                        });
+                    });
                 });
 
-                ui.horizontal(|ui| {
-                    ui.label("Lowpass:");
-                    ui.add(egui::Slider::new(
-                        &mut self.processor.lowpass_freq,
-                        1000.0..=20000.0
-                    ).suffix(" Hz")
-                    .logarithmic(true));
+                ui.add_space(10.0);
+
+                // 2. Spectral Gate
+                ui.group(|ui| {
+                    ui.horizontal(|ui| {
+                        ui.heading("Spectral Gate");
+                        ui.checkbox(&mut self.processor.spectral_gate_enabled, "Enabled");
+                    });
+                    
+                    ui.add_enabled_ui(self.processor.spectral_gate_enabled, |ui| {
+                        ui.horizontal(|ui| {
+                            ui.label("Threshold:");
+                            ui.add(egui::Slider::new(
+                                &mut self.processor.threshold_db,
+                                -50.0..=24.0
+                            ).suffix(" dB"));
+                        });
+                    });
                 });
-            });
 
-            ui.add_space(10.0);
-
-            // 2. Spectral Gate
-            ui.group(|ui| {
-                ui.heading("Spectral Gate");
-                ui.horizontal(|ui| {
-                    ui.label("Threshold:");
-                    ui.add(egui::Slider::new(
-                        &mut self.processor.threshold_db,
-                        -50.0..=24.0
-                    ).suffix(" dB"));
-                });
-            });
-
-            ui.add_space(10.0);
+                ui.add_space(10.0);
 
                 // 3. Noise Gate (renamed from Amplitude Gate)
                 ui.group(|ui| {
-                    ui.heading("Noise Gate");
                     ui.horizontal(|ui| {
-                        ui.label("Threshold:");
-                        ui.add(egui::Slider::new(
-                            &mut self.processor.amplitude_threshold_db,
-                            -60.0..=0.0
-                        ).suffix(" dB"));
+                        ui.heading("Noise Gate");
+                        ui.checkbox(&mut self.processor.amplitude_gate_enabled, "Enabled");
                     });
                     
-                    // Rest of noise gate controls in the same box
-                    ui.label("Attack:");
-                    ui.add(egui::Slider::new(
-                        &mut self.processor.amplitude_attack_ms,
-                        0.1..=100.0
-                    ).suffix(" ms")
-                    .logarithmic(true));
+                    ui.add_enabled_ui(self.processor.amplitude_gate_enabled, |ui| {
+                        ui.horizontal(|ui| {
+                            ui.label("Threshold:");
+                            ui.add(egui::Slider::new(
+                                &mut self.processor.amplitude_threshold_db,
+                                -60.0..=0.0
+                            ).suffix(" dB"));
+                        });
+                        
+                        // Rest of noise gate controls in the same box
+                        ui.label("Attack:");
+                        ui.add(egui::Slider::new(
+                            &mut self.processor.amplitude_attack_ms,
+                            0.1..=100.0
+                        ).suffix(" ms")
+                        .logarithmic(true));
 
-                    ui.label("Release:");
-                    ui.add(egui::Slider::new(
-                        &mut self.processor.amplitude_release_ms,
-                        1.0..=1000.0
-                    ).suffix(" ms")
-                    .logarithmic(true));
+                        ui.label("Release:");
+                        ui.add(egui::Slider::new(
+                            &mut self.processor.amplitude_release_ms,
+                            1.0..=1000.0
+                        ).suffix(" ms")
+                        .logarithmic(true));
 
-                    ui.label("Lookahead:");
-                    ui.add(egui::Slider::new(
-                        &mut self.processor.amplitude_lookahead_ms,
-                        0.0..=20.0
-                    ).suffix(" ms"));
+                        ui.label("Lookahead:");
+                        ui.add(egui::Slider::new(
+                            &mut self.processor.amplitude_lookahead_ms,
+                            0.0..=20.0
+                        ).suffix(" ms"));
+                    });
                 });
 
                 ui.add_space(10.0);
 
                 // 4. Gain Booster
                 ui.group(|ui| {
-                    ui.heading("Gain Booster");
                     ui.horizontal(|ui| {
-                        ui.label("Gain:");
-                        ui.add(egui::Slider::new(
-                            &mut self.processor.gain_db,
-                            0.0..=24.0
-                        ).suffix(" dB"));
+                        ui.heading("Gain Booster");
+                        ui.checkbox(&mut self.processor.gain_boost_enabled, "Enabled");
+                    });
+                    
+                    ui.add_enabled_ui(self.processor.gain_boost_enabled, |ui| {
+                        ui.horizontal(|ui| {
+                            ui.label("Gain:");
+                            ui.add(egui::Slider::new(
+                                &mut self.processor.gain_db,
+                                0.0..=24.0
+                            ).suffix(" dB"));
+                        });
                     });
                 });
 
@@ -159,30 +196,35 @@ impl eframe::App for AudioApp {
 
                 // 5. Limiter
                 ui.group(|ui| {
-                    ui.heading("Lookahead Limiter");
+                    ui.horizontal(|ui| {
+                        ui.heading("Lookahead Limiter");
+                        ui.checkbox(&mut self.processor.limiter_enabled, "Enabled");
+                    });
                     
-                    ui.horizontal(|ui| {
-                        ui.label("Threshold:");
-                        ui.add(egui::Slider::new(
-                            &mut self.processor.limiter_threshold_db,
-                            -12.0..=0.0
-                        ).suffix(" dB"));
-                    });
+                    ui.add_enabled_ui(self.processor.limiter_enabled, |ui| {
+                        ui.horizontal(|ui| {
+                            ui.label("Threshold:");
+                            ui.add(egui::Slider::new(
+                                &mut self.processor.limiter_threshold_db,
+                                -12.0..=0.0
+                            ).suffix(" dB"));
+                        });
 
-                    ui.horizontal(|ui| {
-                        ui.label("Release Time:");
-                        ui.add(egui::Slider::new(
-                            &mut self.processor.limiter_release_ms,
-                            10.0..=500.0
-                        ).suffix(" ms"));
-                    });
+                        ui.horizontal(|ui| {
+                            ui.label("Release Time:");
+                            ui.add(egui::Slider::new(
+                                &mut self.processor.limiter_release_ms,
+                                10.0..=500.0
+                            ).suffix(" ms"));
+                        });
 
-                    ui.horizontal(|ui| {
-                        ui.label("Lookahead:");
-                        ui.add(egui::Slider::new(
-                            &mut self.processor.limiter_lookahead_ms,
-                            1.0..=20.0
-                        ).suffix(" ms"));
+                        ui.horizontal(|ui| {
+                            ui.label("Lookahead:");
+                            ui.add(egui::Slider::new(
+                                &mut self.processor.limiter_lookahead_ms,
+                                1.0..=20.0
+                            ).suffix(" ms"));
+                        });
                     });
                 });
 
