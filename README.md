@@ -1,12 +1,12 @@
-# Rustio
+# Rustic_Audio
 
-Rustio is a voice recorder application with a DSP effects chain for audio cleaning and a small file Opus encoder. This project is licensed under the GPL-3.0 License.
+Rustic_Audio is a voice recorder application with a DSP effects chain for audio cleaning, and an Opus encoder for outputing highly compressed audio files of the best possible audio quality, for use in low-bandwidth communication. This project is licensed under the GPL-3.0 License. This work is supported by the NLnet foundation, and intended for use in the Katzen messenger, as well as any project that needs it.
 
 ## Features
 
 - Record audio from the default input device
 - Apply DSP effects for audio cleaning
-- Encode processed audio to Opus format
+- Encode processed audio to Opus
 - Playback original and processed audio
 
 ## DSP Effects and Settings
@@ -20,15 +20,15 @@ The DSP effects chain includes the following effects:
      - `lowpass_freq`: Frequency threshold in Hz (1000.0 - 20000.0 Hz)
 
 2. **Spectral Gate**
-   - Reduces noise by applying a threshold to the frequency spectrum.
+   - Fast Fourier Transform (FFT) noise reduction.
      - `threshold_db`: Threshold in dB (-50.0 - 24.0 dB)
 
 3. **Noise Gate**
    - Reduces noise by applying a threshold to the amplitude.
      - `amplitude_threshold_db`: Threshold in dB (-60.0 - 0.0 dB)
-     - `amplitude_attack_ms`: Attack time in milliseconds (0.1 - 100.0 ms)
-     - `amplitude_release_ms`: Release time in milliseconds (1.0 - 1000.0 ms)
-     - `amplitude_lookahead_ms`: Lookahead time in milliseconds (0.0 - 20.0 ms)
+     - `amplitude_attack_ms`: Attack time (0.1 - 100.0 ms)
+     - `amplitude_release_ms`: Release time (1.0 - 1000.0 ms)
+     - `amplitude_lookahead_ms`: Lookahead time (0.0 - 20.0 ms)
 
 4. **Gain Booster**
    - Increases the amplitude of the audio signal.
