@@ -64,6 +64,8 @@ impl eframe::App for AudioApp {
         // Set initial window size and make scrollable
         egui::CentralPanel::default().show(ctx, |ui| {
             egui::ScrollArea::vertical().show(ui, |ui| {
+                // Set a consistent width for all UI elements
+                let panel_width = ui.available_width() - 20.0;
                 ui.set_min_width(400.0);  // Minimum width to prevent controls from squishing
                 
                 ui.heading("Audio Processor");
@@ -71,11 +73,14 @@ impl eframe::App for AudioApp {
 
                 // Add effect toggles section
                 ui.group(|ui| {
+                    ui.set_width(panel_width);
                     ui.heading("Effect Toggles");
                     ui.horizontal(|ui| {
                         ui.checkbox(&mut self.processor.filters_enabled, "Filters");
                         ui.checkbox(&mut self.processor.spectral_gate_enabled, "Spectral Gate");
                         ui.checkbox(&mut self.processor.amplitude_gate_enabled, "Noise Gate");
+                    });
+                    ui.horizontal(|ui| {
                         ui.checkbox(&mut self.processor.gain_boost_enabled, "Gain Boost");
                         ui.checkbox(&mut self.processor.limiter_enabled, "Limiter");
                     });
@@ -85,6 +90,7 @@ impl eframe::App for AudioApp {
 
                 // 1. Filters
                 ui.group(|ui| {
+                    ui.set_width(panel_width);
                     ui.horizontal(|ui| {
                         ui.heading("Filters");
                         ui.checkbox(&mut self.processor.filters_enabled, "Enabled");
@@ -115,6 +121,7 @@ impl eframe::App for AudioApp {
 
                 // 2. Spectral Gate
                 ui.group(|ui| {
+                    ui.set_width(panel_width);
                     ui.horizontal(|ui| {
                         ui.heading("Spectral Gate");
                         ui.checkbox(&mut self.processor.spectral_gate_enabled, "Enabled");
@@ -135,6 +142,7 @@ impl eframe::App for AudioApp {
 
                 // 3. Noise Gate (renamed from Amplitude Gate)
                 ui.group(|ui| {
+                    ui.set_width(panel_width);
                     ui.horizontal(|ui| {
                         ui.heading("Noise Gate");
                         ui.checkbox(&mut self.processor.amplitude_gate_enabled, "Enabled");
@@ -176,6 +184,7 @@ impl eframe::App for AudioApp {
 
                 // 4. Gain Booster
                 ui.group(|ui| {
+                    ui.set_width(panel_width);
                     ui.horizontal(|ui| {
                         ui.heading("Gain Booster");
                         ui.checkbox(&mut self.processor.gain_boost_enabled, "Enabled");
@@ -196,6 +205,7 @@ impl eframe::App for AudioApp {
 
                 // 5. Limiter
                 ui.group(|ui| {
+                    ui.set_width(panel_width);
                     ui.horizontal(|ui| {
                         ui.heading("Lookahead Limiter");
                         ui.checkbox(&mut self.processor.limiter_enabled, "Enabled");
@@ -230,108 +240,116 @@ impl eframe::App for AudioApp {
 
                 ui.add_space(20.0);
 
-                let recording = self.is_recording.load(Ordering::Relaxed);
-                let playing = self.is_playing.load(Ordering::Relaxed);
-                let playing_original = self.is_playing_original.load(Ordering::Relaxed);
+                // Recording and playback controls
+                ui.group(|ui| {
+                    ui.set_width(panel_width);
+                    let recording = self.is_recording.load(Ordering::Relaxed);
+                    let playing = self.is_playing.load(Ordering::Relaxed);
+                    let playing_original = self.is_playing_original.load(Ordering::Relaxed);
 
-                if recording {
-                    if ui.button("Stop Recording").clicked() {
-                        self.is_recording.store(false, Ordering::Relaxed);
-                        self.should_cleanup_recording = true;
-                    }
-                } else if !playing && !playing_original && ui.button("Record").clicked() {
-                    let is_recording = Arc::clone(&self.is_recording);
-                    let audio_info = Arc::clone(&self.audio_info);
-                    let processor = self.processor.clone();
-                    let opus_encoder = self.opus_encoder.clone();
-                    self.is_recording.store(true, Ordering::Relaxed);
-                    self.recording_thread = Some(thread::spawn(move || {
-                        if let Ok(_) = record_audio("output.wav", is_recording) {
-                            let mut info = audio_info.lock().unwrap();
-                            info.last_message = "Recording completed successfully".to_string();
-                            
-                            // Process audio
-                            let mut processor_instance = processor;
-                            if let Err(e) = processor_instance.process_file("output.wav", "processed.wav") {
-                                info.last_message = format!("Error processing audio: {:?}", e);
-                                return;
-                            }
+                    if recording {
+                        if ui.button("Stop Recording").clicked() {
+                            self.is_recording.store(false, Ordering::Relaxed);
+                            self.should_cleanup_recording = true;
+                        }
+                    } else if !playing && !playing_original && ui.button("Record").clicked() {
+                        let is_recording = Arc::clone(&self.is_recording);
+                        let audio_info = Arc::clone(&self.audio_info);
+                        let processor = self.processor.clone();
+                        let opus_encoder = self.opus_encoder.clone();
+                        self.is_recording.store(true, Ordering::Relaxed);
+                        self.recording_thread = Some(thread::spawn(move || {
+                            if let Ok(_) = record_audio("output.wav", is_recording) {
+                                let mut info = audio_info.lock().unwrap();
+                                info.last_message = "Recording completed successfully".to_string();
+                                
+                                // Process audio
+                                let mut processor_instance = processor;
+                                if let Err(e) = processor_instance.process_file("output.wav", "processed.wav") {
+                                    info.last_message = format!("Error processing audio: {:?}", e);
+                                    return;
+                                }
 
-                            // Encode to Opus
-                            if let Err(e) = opus_encoder.encode_wav_to_opus("processed.wav", "processed.opus") {
-                                info.last_message = format!("Error encoding to Opus: {:?}", e);
-                            } else {
-                                // Update file info after successful encoding
-                                match opus_playback::get_opus_info("processed.opus") {
-                                    Ok((size, duration)) => {
-                                        info.file_size = size;
-                                        info.duration = duration;
-                                        info.last_message = "Processing and Opus encoding completed successfully".to_string();
-                                    }
-                                    Err(e) => {
-                                        info.last_message = format!("Error getting Opus file info: {:?}", e);
+                                // Encode to Opus
+                                if let Err(e) = opus_encoder.encode_wav_to_opus("processed.wav", "processed.opus") {
+                                    info.last_message = format!("Error encoding to Opus: {:?}", e);
+                                } else {
+                                    // Update file info after successful encoding
+                                    match opus_playback::get_opus_info("processed.opus") {
+                                        Ok((size, duration)) => {
+                                            info.file_size = size;
+                                            info.duration = duration;
+                                            info.last_message = "Processing and Opus encoding completed successfully".to_string();
+                                        }
+                                        Err(e) => {
+                                            info.last_message = format!("Error getting Opus file info: {:?}", e);
+                                        }
                                     }
                                 }
                             }
-                        }
-                    }));
-                }
-
-                ui.add_space(10.0);
-                ui.horizontal(|ui| {
-                    if playing {
-                        if ui.button("Stop Processed Playback").clicked() {
-                            self.is_playing.store(false, Ordering::Relaxed);
-                            self.should_cleanup_playback = true;
-                        }
-                    } else if !recording && !playing_original && ui.button("Play Processed").clicked() {
-                        let is_playing = Arc::clone(&self.is_playing);
-                        let audio_info = Arc::clone(&self.audio_info);
-                        self.is_playing.store(true, Ordering::Relaxed);
-                        self.playback_thread = Some(thread::spawn(move || {
-                            match playback_opus("processed.opus", is_playing) {
-                                Ok(_) => {
-                                    let mut info = audio_info.lock().unwrap();
-                                    info.last_message = "Processed playback completed successfully".to_string();
-                                },
-                                Err(e) => {
-                                    let mut info = audio_info.lock().unwrap();
-                                    info.last_message = format!("Error during processed playback: {:?}", e);
-                                },
-                            }
                         }));
                     }
 
-                    if playing_original {
-                        if ui.button("Stop Original Playback").clicked() {
-                            self.is_playing_original.store(false, Ordering::Relaxed);
-                            self.should_cleanup_playback_original = true;
-                        }
-                    } else if !recording && !playing && ui.button("Play Original").clicked() {
-                        let is_playing = Arc::clone(&self.is_playing_original);
-                        let audio_info = Arc::clone(&self.audio_info);
-                        self.is_playing_original.store(true, Ordering::Relaxed);
-                        self.playback_original_thread = Some(thread::spawn(move || {
-                            match playback_audio("original.wav", is_playing) {
-                                Ok(_) => {
-                                    let mut info = audio_info.lock().unwrap();
-                                    info.last_message = "Original playback completed successfully".to_string();
-                                },
-                                Err(e) => {
-                                    let mut info = audio_info.lock().unwrap();
-                                    info.last_message = format!("Error during original playback: {:?}", e);
-                                },
+                    ui.add_space(10.0);
+                    ui.horizontal(|ui| {
+                        if playing {
+                            if ui.button("Stop Processed Playback").clicked() {
+                                self.is_playing.store(false, Ordering::Relaxed);
+                                self.should_cleanup_playback = true;
                             }
-                        }));
-                    }
+                        } else if !recording && !playing_original && ui.button("Play Processed").clicked() {
+                            let is_playing = Arc::clone(&self.is_playing);
+                            let audio_info = Arc::clone(&self.audio_info);
+                            self.is_playing.store(true, Ordering::Relaxed);
+                            self.playback_thread = Some(thread::spawn(move || {
+                                match playback_opus("processed.opus", is_playing) {
+                                    Ok(_) => {
+                                        let mut info = audio_info.lock().unwrap();
+                                        info.last_message = "Processed playback completed successfully".to_string();
+                                    },
+                                    Err(e) => {
+                                        let mut info = audio_info.lock().unwrap();
+                                        info.last_message = format!("Error during processed playback: {:?}", e);
+                                    },
+                                }
+                            }));
+                        }
+
+                        if playing_original {
+                            if ui.button("Stop Original Playback").clicked() {
+                                self.is_playing_original.store(false, Ordering::Relaxed);
+                                self.should_cleanup_playback_original = true;
+                            }
+                        } else if !recording && !playing && ui.button("Play Original").clicked() {
+                            let is_playing = Arc::clone(&self.is_playing_original);
+                            let audio_info = Arc::clone(&self.audio_info);
+                            self.is_playing_original.store(true, Ordering::Relaxed);
+                            self.playback_original_thread = Some(thread::spawn(move || {
+                                match playback_audio("original.wav", is_playing) {
+                                    Ok(_) => {
+                                        let mut info = audio_info.lock().unwrap();
+                                        info.last_message = "Original playback completed successfully".to_string();
+                                    },
+                                    Err(e) => {
+                                        let mut info = audio_info.lock().unwrap();
+                                        info.last_message = format!("Error during original playback: {:?}", e);
+                                    },
+                                }
+                            }));
+                        }
+                    });
                 });
 
-                ui.add_space(20.0);
+                ui.add_space(10.0);
 
-                let info = self.audio_info.lock().unwrap();
-                ui.label(format!("File size: {} bytes", info.file_size));
-                ui.label(format!("Duration: {:.2} seconds", info.duration));
-                ui.label(&info.last_message);
+                // Status information
+                ui.group(|ui| {
+                    ui.set_width(panel_width);
+                    let info = self.audio_info.lock().unwrap();
+                    ui.label(format!("File size: {} bytes", info.file_size));
+                    ui.label(format!("Duration: {:.2} seconds", info.duration));
+                    ui.label(&info.last_message);
+                });
             });
         });
 
@@ -353,7 +371,7 @@ fn main() {
     };
     
     eframe::run_native(
-        "Audio Processor",  // Changed name to match heading
+        "Rustic_Audio",  // Changed name to match heading
         options,
         Box::new(|_cc| Box::new(AudioApp::default())),
     ).unwrap();
