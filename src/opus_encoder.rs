@@ -17,8 +17,18 @@ impl OpusEncoder {
             // Remove from constructor if removed from struct
             // sample_rate: SampleRate::Hz48000,
             channels: Channels::Mono,
-            bitrate: 12000,
+            bitrate: 12000, // Default 12kbps
         }
+    }
+
+    // Add setter for bitrate
+    pub fn set_bitrate(&mut self, bitrate: i32) {
+        self.bitrate = bitrate;
+    }
+
+    // Get current bitrate
+    pub fn get_bitrate(&self) -> i32 {
+        self.bitrate
     }
 
     fn resample(input: &[f32], input_rate: u32, output_rate: u32) -> Vec<f32> {
@@ -46,55 +56,71 @@ impl OpusEncoder {
         output
     }
 
-    pub fn encode_wav_to_opus(&self, wav_path: &str, opus_path: &str) -> Result<(), Box<dyn std::error::Error>> {
-        let mut reader = hound::WavReader::open(wav_path)?;
+    pub fn encode_wav_to_opus(&self, input_path: &str, output_path: &str) -> Result<(), Box<dyn std::error::Error>> {
+        // Read the WAV file
+        let mut reader = hound::WavReader::open(input_path)?;
         let spec = reader.spec();
-
-        println!("WAV file specs:");
-        println!("  Sample rate: {}", spec.sample_rate);
-        println!("  Channels: {}", spec.channels);
-        println!("  Bits per sample: {}", spec.bits_per_sample);
-
-        // Read all samples and convert to f32
+        
+        // Convert to 48kHz mono if needed
         let samples: Vec<f32> = if spec.sample_format == hound::SampleFormat::Float {
             reader.samples::<f32>().map(|s| s.unwrap()).collect()
         } else {
-            reader.samples::<i16>()
-                .map(|s| s.unwrap() as f32 / 32768.0)
-                .collect()
+            reader.samples::<i16>().map(|s| s.unwrap() as f32 / 32768.0).collect()
         };
-
-        let input_duration = samples.len() as f32 / spec.sample_rate as f32;
-        println!("Input file duration: {} seconds", input_duration);
-
-        // Resample to 48kHz if needed
-        let resampled_samples = if spec.sample_rate != 48000 {
-            Self::resample(&samples, spec.sample_rate, 48000)
+        
+        // Convert to mono if stereo
+        let mono_samples: Vec<f32> = if spec.channels == 2 {
+            samples.chunks(2)
+                .map(|chunk| chunk[0]) // Take left channel
+                .collect()
         } else {
             samples
         };
-
-        let resampled_duration = resampled_samples.len() as f32 / 48000.0;
-        println!("Resampled duration: {} seconds", resampled_duration);
-
-        // Convert back to i16 for Opus encoding
-        let samples_i16: Vec<i16> = resampled_samples.iter()
-            .map(|&s| (s * 32767.0).min(32767.0).max(-32768.0) as i16)
-            .collect();
-
-        println!("Converting to Opus:");
-        println!("  Frame size: 960 samples (20ms at 48kHz)");
-        println!("  Total frames: {}", samples_i16.len() / 960);
-
+        
+        // Resample to 48kHz if needed
+        let resampled_samples = if spec.sample_rate != 48000 {
+            let input_duration = mono_samples.len() as f32 / spec.sample_rate as f32;
+            let output_len = (input_duration * 48000.0) as usize;
+            let scale = (mono_samples.len() - 1) as f32 / (output_len - 1) as f32;
+            
+            let mut output = Vec::with_capacity(output_len);
+            for i in 0..output_len {
+                let pos = i as f32 * scale;
+                let index = pos as usize;
+                let frac = pos - index as f32;
+                
+                let sample = if index + 1 < mono_samples.len() {
+                    mono_samples[index] * (1.0 - frac) + mono_samples[index + 1] * frac
+                } else {
+                    mono_samples[index]
+                };
+                
+                output.push(sample);
+            }
+            output
+        } else {
+            mono_samples
+        };
+        
+        // Create Opus encoder
         let mut encoder = audiopus::coder::Encoder::new(
             SampleRate::Hz48000,
             self.channels,
             Application::Audio
         )?;
-
+        
         encoder.set_bitrate(Bitrate::BitsPerSecond(self.bitrate))?;
+        
+        // Convert resampled_samples to i16 for encoding
+        let samples_i16: Vec<i16> = resampled_samples.iter()
+            .map(|&s| (s * 32767.0).round() as i16)
+            .collect();
+        
+        println!("Converting to Opus:");
+        println!("  Frame size: 960 samples (20ms at 48kHz)");
+        println!("  Total frames: {}", samples_i16.len() / 960);
 
-        let file = BufWriter::new(File::create(opus_path)?);
+        let file = BufWriter::new(File::create(output_path)?);
         let serial = rand::random();
         let mut packet_writer = PacketWriter::new(file);
 

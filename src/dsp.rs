@@ -32,8 +32,8 @@ impl AudioProcessor {
     pub fn new(sample_rate: f32) -> Self {
         Self {
             sample_rate,
-            threshold_db: 5.0,      // Changed default for spectral gate
-            amplitude_threshold_db: -30.0,  // Changed default for amplitude gate
+            threshold_db: 5.0,
+            amplitude_threshold_db: -20.0,
             amplitude_attack_ms: 10.0,
             amplitude_release_ms: 100.0,
             amplitude_lookahead_ms: 5.0,
@@ -41,16 +41,14 @@ impl AudioProcessor {
             limiter_threshold_db: -1.0,
             limiter_release_ms: 50.0,
             limiter_lookahead_ms: 5.0,
-            lowpass_freq: 10000.0,  // Changed default lowpass
+            lowpass_freq: 20000.0,
             highpass_freq: 75.0,
-            // Initialize RMS normalization parameters
-            rms_target_db: -15.0,
+            rms_target_db: -20.0,
             rms_enabled: true,
-            // Initialize all effects as enabled by default
             filters_enabled: true,
             spectral_gate_enabled: true,
             amplitude_gate_enabled: true,
-            gain_boost_enabled: true,
+            gain_boost_enabled: false,
             limiter_enabled: true,
         }
     }
@@ -89,6 +87,9 @@ impl AudioProcessor {
         if self.limiter_enabled {
             self.apply_lookahead_limiter(&mut samples); // 5. Limiter
         }
+        
+        // Apply a 200ms fade-in to avoid clicks
+        self.apply_fade_in(&mut samples, 200.0);
         
         // Write output file - use the SAME spec as input
         let spec = hound::WavSpec {
@@ -411,6 +412,21 @@ impl AudioProcessor {
         let new_rms_db = 20.0 * new_rms.log10();
         
         println!("  New RMS after normalization: {:.2} dB", new_rms_db);
+    }
+
+    // Add a fade-in function to the processor
+    fn apply_fade_in(&self, samples: &mut Vec<f32>, fade_ms: f32) {
+        let fade_samples = (fade_ms / 1000.0 * self.sample_rate) as usize;
+        let fade_samples = fade_samples.min(samples.len());
+        
+        println!("Applying {:.0}ms fade-in ({} samples)", fade_ms, fade_samples);
+        
+        for i in 0..fade_samples {
+            let gain = (i as f32) / (fade_samples as f32);
+            // Use a smooth curve for the fade (cubic)
+            let smooth_gain = gain * gain * (3.0 - 2.0 * gain);
+            samples[i] *= smooth_gain;
+        }
     }
 }
 

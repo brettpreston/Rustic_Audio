@@ -75,7 +75,7 @@ pub fn playback_opus(file_path: &str, is_playing_flag: Arc<AtomicBool>) -> Resul
 
                         while pos < data.len() {
                             // Check if we need more samples from the current buffer
-                            let (need_new_packet, current_pos) = {
+                            let (need_new_packet, _current_pos) = {
                                 let samples = *decoded_samples.lock().unwrap();
                                 let position = *buffer_position.lock().unwrap();
                                 (position >= samples, position)
