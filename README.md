@@ -1,6 +1,6 @@
 # Rustic_Audio
 
-Rustic_Audio is a voice recorder application with a DSP effects chain for audio cleaning, and an Opus encoder for outputing highly compressed audio files of the best possible audio quality, for use in low-bandwidth communication. This project is licensed under the GPL-3.0 License. This work is supported by the NLnet foundation, and intended for use in the Katzen messenger, as well as any project that needs it.
+Rustic_Audio is a voice recorder application with a DSP effects chain for audio cleaning, and an Opus encoder for outputing highly compressed audio files for use in low-bandwidth communication. This project is licensed under the GPL-3.0 License. This work is supported by the NLnet foundation, and intended for use in the Katzen messenger, as well as any project that needs it.
 
 ## Features
 
