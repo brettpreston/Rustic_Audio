@@ -75,17 +75,41 @@ impl eframe::App for AudioApp {
                 ui.group(|ui| {
                     ui.set_width(panel_width);
                     ui.heading("Effect Toggles");
+                    
+                    // Add RMS Normalization toggle first
                     ui.horizontal(|ui| {
+                        ui.checkbox(&mut self.processor.rms_enabled, "RMS Normalization");
                         ui.checkbox(&mut self.processor.filters_enabled, "Filters");
                         ui.checkbox(&mut self.processor.spectral_gate_enabled, "Spectral Gate");
-                        ui.checkbox(&mut self.processor.amplitude_gate_enabled, "Noise Gate");
                     });
                     ui.horizontal(|ui| {
+                        ui.checkbox(&mut self.processor.amplitude_gate_enabled, "Noise Gate");
                         ui.checkbox(&mut self.processor.gain_boost_enabled, "Gain Boost");
                         ui.checkbox(&mut self.processor.limiter_enabled, "Limiter");
                     });
                 });
                 
+                ui.add_space(10.0);
+
+                // Add RMS Normalization section
+                ui.group(|ui| {
+                    ui.set_width(panel_width);
+                    ui.horizontal(|ui| {
+                        ui.heading("RMS Normalization");
+                        ui.checkbox(&mut self.processor.rms_enabled, "Enabled");
+                    });
+                    
+                    ui.add_enabled_ui(self.processor.rms_enabled, |ui| {
+                        ui.horizontal(|ui| {
+                            ui.label("Target RMS:");
+                            ui.add(egui::Slider::new(
+                                &mut self.processor.rms_target_db,
+                                -30.0..=-6.0
+                            ).suffix(" dB"));
+                        });
+                    });
+                });
+
                 ui.add_space(10.0);
 
                 // 1. Filters
@@ -259,7 +283,7 @@ impl eframe::App for AudioApp {
                         let opus_encoder = self.opus_encoder.clone();
                         self.is_recording.store(true, Ordering::Relaxed);
                         self.recording_thread = Some(thread::spawn(move || {
-                            if let Ok(_) = record_audio("output.wav", is_recording) {
+                            if let Ok(_) = record_audio("output.wav", is_recording, processor.clone()) {
                                 let mut info = audio_info.lock().unwrap();
                                 info.last_message = "Recording completed successfully".to_string();
                                 

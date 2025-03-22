@@ -4,8 +4,9 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::sync::Mutex;
 use std::error::Error;
+use crate::dsp::AudioProcessor;
 
-pub fn record_audio(file_path: &str, is_recording_flag: Arc<AtomicBool>) -> Result<(), Box<dyn Error>> {
+pub fn record_audio(file_path: &str, is_recording_flag: Arc<AtomicBool>, processor: AudioProcessor) -> Result<(), Box<dyn Error>> {
     let host = cpal::default_host();
     let device = host.default_input_device().expect("Failed to get default input device");
     let config = device.default_input_config()?;
@@ -154,16 +155,6 @@ pub fn record_audio(file_path: &str, is_recording_flag: Arc<AtomicBool>) -> Resu
     let mut reader = hound::WavReader::open(temp_file)?;
     let input_spec = reader.spec();
     
-    // Create the final 48kHz mono file
-    let output_spec = hound::WavSpec {
-        channels: 1, // Mono
-        sample_rate: 48000,
-        bits_per_sample: 16,
-        sample_format: hound::SampleFormat::Int,
-    };
-    
-    let mut writer = hound::WavWriter::create(file_path, output_spec)?;
-    
     // Read all samples into memory
     let samples: Vec<i16> = reader.samples::<i16>()
         .filter_map(Result::ok)
@@ -178,13 +169,30 @@ pub fn record_audio(file_path: &str, is_recording_flag: Arc<AtomicBool>) -> Resu
         samples
     };
     
-    // Resample to 48kHz if needed
+    // Convert to float for processing
+    let mut mono_float: Vec<f32> = mono_samples.iter()
+        .map(|&s| s as f32 / 32768.0)
+        .collect();
+
+    // Apply highpass filter at 20Hz
+    apply_highpass_filter(&mut mono_float, 20.0, input_spec.sample_rate as f32);
+
+    // Apply RMS normalization with peak limiting if enabled in processor
+    if processor.rms_enabled {
+        normalize_audio_rms(&mut mono_float, processor.rms_target_db);
+    }
+    
+    // Create a new WavWriter for the final output file
+    let output_spec = hound::WavSpec {
+        channels: 1, // Mono output
+        sample_rate: 48000, // Always output at 48kHz
+        bits_per_sample: 16,
+        sample_format: hound::SampleFormat::Int,
+    };
+
+    let mut output_writer = hound::WavWriter::create(file_path, output_spec)?;
+
     if input_spec.sample_rate != 48000 {
-        let mono_float: Vec<f32> = mono_samples.iter()
-            .map(|&s| s as f32 / 32768.0)
-            .collect();
-            
-        // Simple linear interpolation resampling
         let input_duration = mono_float.len() as f32 / input_spec.sample_rate as f32;
         let output_len = (input_duration * 48000.0) as usize;
         let scale = (mono_float.len() - 1) as f32 / (output_len - 1) as f32;
@@ -201,19 +209,98 @@ pub fn record_audio(file_path: &str, is_recording_flag: Arc<AtomicBool>) -> Resu
             };
             
             let sample_i16 = (sample * 32767.0).min(32767.0).max(-32768.0) as i16;
-            writer.write_sample(sample_i16)?;
+            output_writer.write_sample(sample_i16)?;
         }
     } else {
-        // No resampling needed, just write mono samples
-        for sample in mono_samples {
-            writer.write_sample(sample)?;
+        // No resampling needed, just write normalized float samples as i16
+        for &sample in &mono_float {
+            let sample_i16 = (sample * 32767.0).min(32767.0).max(-32768.0) as i16;
+            output_writer.write_sample(sample_i16)?;
         }
     }
-    
-    writer.finalize()?;
+
+    output_writer.finalize()?;
     
     // Clean up temporary file
     std::fs::remove_file(temp_file)?;
 
     Ok(())
+}
+
+// Add this new function for RMS normalization with peak limiting
+fn normalize_audio_rms(samples: &mut Vec<f32>, target_rms_db: f32) {
+    // Calculate current RMS
+    let rms_current = (samples.iter().map(|&x| x * x).sum::<f32>() / samples.len() as f32).sqrt();
+    let rms_current_db = 20.0 * rms_current.log10();
+    
+    // Convert target RMS from dB to linear
+    let target_rms = 10.0f32.powf(target_rms_db / 20.0);
+    
+    // Calculate gain factor
+    let gain_factor = target_rms / rms_current;
+    
+    println!("Audio normalization:");
+    println!("  Current RMS: {:.2} dB", rms_current_db);
+    println!("  Target RMS: {:.2} dB", target_rms_db);
+    println!("  Gain factor: {:.2}x", gain_factor);
+    
+    // Apply gain with peak limiting
+    for sample in samples.iter_mut() {
+        // Apply gain
+        *sample *= gain_factor;
+        
+        // Apply soft clipping to prevent hard clipping
+        if *sample > 0.95 {
+            *sample = 0.95 + (1.0 - 0.95) * (1.0 - (1.0 - (*sample - 0.95) / (1.0 - 0.95)).powi(2));
+        } else if *sample < -0.95 {
+            *sample = -0.95 - (1.0 - 0.95) * (1.0 - (1.0 - (-*sample - 0.95) / (1.0 - 0.95)).powi(2));
+        }
+        
+        // Hard limit as a safety measure
+        *sample = sample.max(-1.0).min(1.0);
+    }
+    
+    // Calculate new RMS after normalization
+    let new_rms = (samples.iter().map(|&x| x * x).sum::<f32>() / samples.len() as f32).sqrt();
+    let new_rms_db = 20.0 * new_rms.log10();
+    
+    println!("  New RMS after normalization: {:.2} dB", new_rms_db);
+}
+
+// Add this new function for the highpass filter
+fn apply_highpass_filter(samples: &mut Vec<f32>, cutoff_hz: f32, sample_rate: f32) {
+    println!("Applying highpass filter at {} Hz", cutoff_hz);
+    
+    // Calculate filter coefficients (first-order highpass)
+    let dt = 1.0 / sample_rate;
+    let rc = 1.0 / (2.0 * std::f32::consts::PI * cutoff_hz);
+    let alpha = rc / (rc + dt);
+    
+    // Initialize previous values
+    let mut prev_in = 0.0;
+    let mut prev_out = 0.0;
+    
+    // Apply the filter
+    for sample in samples.iter_mut() {
+        let current_in = *sample;
+        let current_out = alpha * (prev_out + current_in - prev_in);
+        
+        *sample = current_out;
+        
+        prev_in = current_in;
+        prev_out = current_out;
+    }
+    
+    // Calculate and print DC offset before and after filtering
+    let dc_before = samples.iter().sum::<f32>() / samples.len() as f32;
+    
+    // Remove any remaining DC offset
+    let dc_after = samples.iter().sum::<f32>() / samples.len() as f32;
+    for sample in samples.iter_mut() {
+        *sample -= dc_after;
+    }
+    
+    println!("  DC offset before: {:.6}", dc_before);
+    println!("  DC offset after: {:.6}", dc_after);
+    println!("  Final DC offset: {:.6}", samples.iter().sum::<f32>() / samples.len() as f32);
 }

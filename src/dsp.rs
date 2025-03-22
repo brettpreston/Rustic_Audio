@@ -17,6 +17,9 @@ pub struct AudioProcessor {
     pub limiter_lookahead_ms: f32,
     pub lowpass_freq: f32,
     pub highpass_freq: f32,
+    // Add RMS normalization parameters
+    pub rms_target_db: f32,
+    pub rms_enabled: bool,
     // Add toggle flags for each effect
     pub filters_enabled: bool,
     pub spectral_gate_enabled: bool,
@@ -40,6 +43,9 @@ impl AudioProcessor {
             limiter_lookahead_ms: 5.0,
             lowpass_freq: 10000.0,  // Changed default lowpass
             highpass_freq: 75.0,
+            // Initialize RMS normalization parameters
+            rms_target_db: -15.0,
+            rms_enabled: true,
             // Initialize all effects as enabled by default
             filters_enabled: true,
             spectral_gate_enabled: true,
@@ -61,6 +67,11 @@ impl AudioProcessor {
         } else {
             reader.samples::<i16>().map(|s| s.unwrap() as f32 / 32768.0).collect()
         };
+        
+        // Apply RMS normalization if enabled (before other processing)
+        if self.rms_enabled {
+            self.apply_rms_normalization(&mut samples);
+        }
         
         // Apply processing in order, but only if enabled
         if self.filters_enabled {
@@ -360,6 +371,46 @@ impl AudioProcessor {
         // Ensure output length matches input length
         output.truncate(samples.len());
         samples.copy_from_slice(&output);
+    }
+
+    // Add the RMS normalization function
+    fn apply_rms_normalization(&self, samples: &mut Vec<f32>) {
+        // Calculate current RMS
+        let rms_current = (samples.iter().map(|&x| x * x).sum::<f32>() / samples.len() as f32).sqrt();
+        let rms_current_db = 20.0 * rms_current.log10();
+        
+        // Convert target RMS from dB to linear
+        let target_rms = 10.0f32.powf(self.rms_target_db / 20.0);
+        
+        // Calculate gain factor
+        let gain_factor = target_rms / rms_current;
+        
+        println!("RMS Normalization:");
+        println!("  Current RMS: {:.2} dB", rms_current_db);
+        println!("  Target RMS: {:.2} dB", self.rms_target_db);
+        println!("  Gain factor: {:.2}x", gain_factor);
+        
+        // Apply gain with peak limiting
+        for sample in samples.iter_mut() {
+            // Apply gain
+            *sample *= gain_factor;
+            
+            // Apply soft clipping to prevent hard clipping
+            if *sample > 0.95 {
+                *sample = 0.95 + (1.0 - 0.95) * (1.0 - (1.0 - (*sample - 0.95) / (1.0 - 0.95)).powi(2));
+            } else if *sample < -0.95 {
+                *sample = -0.95 - (1.0 - 0.95) * (1.0 - (1.0 - (-*sample - 0.95) / (1.0 - 0.95)).powi(2));
+            }
+            
+            // Hard limit as a safety measure
+            *sample = sample.max(-1.0).min(1.0);
+        }
+        
+        // Calculate new RMS after normalization
+        let new_rms = (samples.iter().map(|&x| x * x).sum::<f32>() / samples.len() as f32).sqrt();
+        let new_rms_db = 20.0 * new_rms.log10();
+        
+        println!("  New RMS after normalization: {:.2} dB", new_rms_db);
     }
 }
 
