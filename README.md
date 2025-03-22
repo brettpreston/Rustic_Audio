@@ -40,6 +40,10 @@ The DSP effects chain includes the following effects:
      - `limiter_release_ms`: Release time in milliseconds (10.0 - 500.0 ms)
      - `limiter_lookahead_ms`: Lookahead time in milliseconds (1.0 - 20.0 ms)
 
+## Dependencies
+   - CMake (for Opus Encoding)
+   - AlSA (API for accessing audio devices on Linux)
+
 ## License
 
 This project is licensed under the GPL-3.0 License. See the LICENSE file for more details.
