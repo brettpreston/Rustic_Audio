@@ -8,11 +8,13 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::thread;
 use std::sync::Mutex;
-use crate::dsp::AudioProcessor;
-use crate::opus_encoder::OpusEncoder;
 use crate::record::record_audio;
 use crate::playback::playback_audio;
 use crate::opus_playback::playback_opus;
+
+// Keep these re-exports for public use
+pub use crate::dsp::AudioProcessor;
+pub use crate::opus_encoder::OpusEncoder;
 
 #[derive(Clone)]
 pub struct AudioFileInfo {
@@ -24,6 +26,10 @@ pub struct AudioFileInfo {
     pub last_message: String,
 }
 
+/// Main audio processing and recording library
+/// 
+/// `RusticAudio` provides functionality for recording, processing, and playing back audio
+/// with various DSP effects and Opus compression.
 pub struct RusticAudio {
     is_recording: Arc<AtomicBool>,
     is_playing: Arc<AtomicBool>,
@@ -64,10 +70,19 @@ impl Default for RusticAudio {
 }
 
 impl RusticAudio {
+    /// Creates a new instance of RusticAudio with default settings
     pub fn new() -> Self {
         Self::default()
     }
 
+    /// Starts recording audio to the specified file path
+    /// 
+    /// # Arguments
+    /// * `output_path` - The path where the processed audio will be saved
+    /// 
+    /// # Returns
+    /// * `Ok(())` if recording started successfully
+    /// * `Err(String)` with an error message if recording couldn't be started
     pub fn start_recording(&mut self, output_path: &str) -> Result<(), String> {
         if self.is_recording.load(Ordering::Relaxed) || 
            self.is_playing.load(Ordering::Relaxed) || 
@@ -338,64 +353,3 @@ impl RusticAudio {
     }
 }
 
-// Example of how to use the library
-fn main() {
-    println!("RusticAudio library - Example usage");
-    
-    // Create a new instance of RusticAudio
-    let mut audio = RusticAudio::new();
-    
-    // Configure audio processing parameters
-    audio.processor.threshold_db = -30.0;                // Spectral gate threshold
-    audio.processor.amplitude_threshold_db = -40.0;      // Amplitude gate threshold
-    audio.processor.amplitude_attack_ms = 5.0;           // Attack time for amplitude gate
-    audio.processor.amplitude_release_ms = 50.0;         // Release time for amplitude gate
-    audio.processor.gain_db = 3.0;                       // Gain boost in dB
-    audio.processor.limiter_threshold_db = -1.0;         // Limiter threshold
-    audio.processor.limiter_release_ms = 50.0;           // Limiter release time
-    audio.processor.lowpass_freq = 18000.0;              // Lowpass filter cutoff frequency
-    audio.processor.highpass_freq = 100.0;               // Highpass filter cutoff frequency
-    audio.processor.rms_target_db = -18.0;               // Target RMS level for normalization
-    
-    // Enable/disable specific processing stages
-    audio.processor.rms_enabled = true;                  // Enable RMS normalization
-    audio.processor.filters_enabled = true;              // Enable filters
-    audio.processor.spectral_gate_enabled = true;        // Enable spectral gate
-    audio.processor.amplitude_gate_enabled = true;       // Enable amplitude gate
-    audio.processor.gain_boost_enabled = false;          // Disable gain boost
-    audio.processor.limiter_enabled = true;              // Enable limiter
-    
-    // Configure Opus encoder
-    audio.set_opus_bitrate(16000);                       // Set Opus bitrate to 16 kbps
-    
-    println!("Library configured with the following parameters:");
-    println!("  Spectral gate threshold: {} dB", audio.processor.threshold_db);
-    println!("  Amplitude gate threshold: {} dB", audio.processor.amplitude_threshold_db);
-    println!("  Highpass filter: {} Hz", audio.processor.highpass_freq);
-    println!("  Lowpass filter: {} Hz", audio.processor.lowpass_freq);
-    println!("  RMS target level: {} dB", audio.processor.rms_target_db);
-    println!("  Opus bitrate: {} bps", audio.get_opus_bitrate());
-    
-    // Example of processing a file (commented out)
-    // if let Err(e) = audio.process_file("input.wav", "processed.wav") {
-    //     println!("Error processing file: {:?}", e);
-    // }
-    
-    // Example of recording (commented out)
-    // match audio.start_recording("recording.wav") {
-    //     Ok(_) => {
-    //         println!("Recording started. Press Enter to stop...");
-    //         let mut input = String::new();
-    //         std::io::stdin().read_line(&mut input).unwrap();
-    //         
-    //         if let Err(e) = audio.stop_recording() {
-    //             println!("Error stopping recording: {}", e);
-    //         } else {
-    //             println!("Recording stopped and processed");
-    //         }
-    //     },
-    //     Err(e) => println!("Error starting recording: {}", e),
-    // }
-    
-    println!("For more examples, see the documentation");
-}

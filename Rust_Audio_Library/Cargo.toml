@@ -12,3 +12,7 @@ rand = "0.8"
 audiopus = "0.3.0-rc.0"
 ogg = "0.8.0"
 opus = "0.3.0"
+
+[lib]
+name = "rustio"        # Optional: Name of the library
+path = "src/lib.rs"    # Optional: Path to the library file (default is src/lib.rs)
