@@ -45,7 +45,7 @@ The DSP effects chain includes the following effects:
 
 ## Dependencies
    - CMake (for Opus Encoding)
-   - AlSA (API for accessing audio devices on Linux)
+   - ALSA (API for accessing audio devices on Linux)
 
 ## License
 
