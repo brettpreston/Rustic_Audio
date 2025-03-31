@@ -159,7 +159,7 @@ The `AudioProcessor` provides several configurable DSP settings to control audio
 
 | Setting                     | Type    | Default Value | Description                                                                 |
 |-----------------------------|---------|---------------|-----------------------------------------------------------------------------|
-| `sample_rate`               | `f32`  | `44100.0`     | The sample rate of the audio in Hz.                                         |
+| `sample_rate`               | `f32`  | `48000.0`     | The sample rate of the audio in Hz.                                         |
 | `threshold_db`              | `f32`  | `5.0`         | Threshold in dB for the spectral noise gate.                                |
 | `amplitude_threshold_db`    | `f32`  | `-20.0`       | Threshold in dB for the amplitude gate.                                     |
 | `amplitude_attack_ms`       | `f32`  | `10.0`        | Attack time in milliseconds for the amplitude gate.                         |
@@ -191,12 +191,12 @@ let mut processor = AudioProcessor::new(48000.0); // Set sample rate to 48 kHz
 // Enable or disable specific effects
 processor.rms_enabled = true;
 processor.filters_enabled = true;
-processor.spectral_gate_enabled = false; // Disable spectral noise gate
+processor.spectral_gate_enabled = true;
 
 // Adjust parameters
 processor.gain_db = 10.0; // Increase gain boost to 10 dB
-processor.lowpass_freq = 18000.0; // Set low-pass filter cutoff to 18 kHz
-processor.highpass_freq = 100.0; // Set high-pass filter cutoff to 100 Hz
+processor.lowpass_freq = 20000.0; // Set low-pass filter cutoff to 20 kHz
+processor.highpass_freq = 75.0; // Set high-pass filter cutoff to 75 Hz
 processor.limiter_threshold_db = -3.0; // Set limiter threshold to -3 dB
 ```
 
@@ -232,8 +232,8 @@ use rustic_audio_tool::OpusEncoder;
 
 let mut encoder = OpusEncoder::new();
 
-// Set the bitrate to 64 kbps
-encoder.set_bitrate(64000);
+// Set the bitrate to 12 kbps
+encoder.set_bitrate(12000);
 
 // Get the current bitrate
 let bitrate = encoder.get_bitrate();
@@ -253,7 +253,7 @@ if let Err(e) = encoder.encode_wav_to_opus("input.wav", "output.opus") {
 #### **How the Encoding Works**
 
 1. **Resampling**: If the input WAV file is not 48 kHz, it will be resampled to 48 kHz.
-2. **Mono Conversion**: If the input WAV file is stereo, it will be converted to mono by taking the left channel.
+2. **Mono Conversion**: If the input WAV file is stereo, it will be converted to mono by isolating the left channel.
 3. **Encoding**: The audio is encoded to Opus format using the specified bitrate and channel configuration.
 4. **Output**: The encoded Opus file is saved to the specified output path.
 

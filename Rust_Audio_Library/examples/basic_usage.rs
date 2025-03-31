@@ -14,8 +14,8 @@ fn main() {
     audio.processor.gain_db = 3.0;                       // Gain boost in dB
     audio.processor.limiter_threshold_db = -1.0;         // Limiter threshold
     audio.processor.limiter_release_ms = 50.0;           // Limiter release time
-    audio.processor.lowpass_freq = 18000.0;              // Lowpass filter cutoff frequency
-    audio.processor.highpass_freq = 100.0;               // Highpass filter cutoff frequency
+    audio.processor.lowpass_freq = 20000.0;              // Lowpass filter cutoff frequency
+    audio.processor.highpass_freq = 75.0;                // Highpass filter cutoff frequency
     audio.processor.rms_target_db = -18.0;               // Target RMS level for normalization
     
     // Enable/disable specific processing stages

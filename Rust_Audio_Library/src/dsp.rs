@@ -17,10 +17,8 @@ pub struct AudioProcessor {
     pub limiter_lookahead_ms: f32,
     pub lowpass_freq: f32,
     pub highpass_freq: f32,
-    // Add RMS normalization parameters
     pub rms_target_db: f32,
     pub rms_enabled: bool,
-    // Add toggle flags for each effect
     pub filters_enabled: bool,
     pub spectral_gate_enabled: bool,
     pub amplitude_gate_enabled: bool,
