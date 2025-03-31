@@ -8,26 +8,24 @@ pub struct AudioProcessor {
     pub sample_rate: f32,
     pub threshold_db: f32,
     pub amplitude_threshold_db: f32,
-    pub amplitude_attack_ms: f32,    // New attack time parameter
-    pub amplitude_release_ms: f32,   // New release time parameter
-    pub amplitude_lookahead_ms: f32, // New lookahead parameter
+    pub amplitude_attack_ms: f32,
+    pub amplitude_release_ms: f32,
+    pub amplitude_lookahead_ms: f32,
     pub gain_db: f32,
     pub limiter_threshold_db: f32,
     pub limiter_release_ms: f32,
     pub limiter_lookahead_ms: f32,
     pub lowpass_freq: f32,
     pub highpass_freq: f32,
-    // Add RMS normalization parameters
     pub rms_target_db: f32,
     pub rms_enabled: bool,
-    // Add toggle flags for each effect
     pub filters_enabled: bool,
     pub spectral_gate_enabled: bool,
     pub amplitude_gate_enabled: bool,
     pub gain_boost_enabled: bool,
     pub limiter_enabled: bool,
 }
-//AudioProcessor Defult 
+//AudioProcessor Default 
 impl AudioProcessor {
     pub fn new(sample_rate: f32) -> Self {
         Self {
@@ -432,6 +430,6 @@ impl AudioProcessor {
 
 impl Default for AudioProcessor {
     fn default() -> Self {
-        Self::new(44100.0)
+        Self::new(48000.0) 
     }
 }

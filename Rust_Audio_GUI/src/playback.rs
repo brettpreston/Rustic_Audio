@@ -17,7 +17,7 @@ pub fn playback_audio(file_path: &str, is_playing_flag: Arc<AtomicBool>) -> Resu
     
     // Use default config instead of matching the file's sample rate
     let config = device.default_output_config()?;
-    let sample_format = config.sample_format();
+    let _sample_format = config.sample_format();
     let config = config.config();
     
     // Read all samples into memory
