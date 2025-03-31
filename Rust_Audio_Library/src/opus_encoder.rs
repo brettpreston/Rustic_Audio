@@ -31,31 +31,6 @@ impl OpusEncoder {
         self.bitrate
     }
 
-    fn resample(input: &[f32], input_rate: u32, output_rate: u32) -> Vec<f32> {
-        let input_duration = input.len() as f32 / input_rate as f32;
-        let output_len = (input_duration * output_rate as f32) as usize;
-        
-        println!("Resampling:");
-        println!("  Input samples: {}, rate: {}", input.len(), input_rate);
-        println!("  Input duration: {} seconds", input_duration);
-        println!("  Target rate: {}", output_rate);
-        println!("  Output length needed: {}", output_len);
-        
-        let mut output = Vec::with_capacity(output_len);
-        let scale = (input.len() - 1) as f32 / (output_len - 1) as f32;
-        
-        for i in 0..output_len {
-            let pos = i as f32 * scale;
-            let index = pos as usize;
-            output.push(input[index]);
-        }
-        
-        println!("  Output samples: {}", output.len());
-        println!("  Output duration: {} seconds", output.len() as f32 / output_rate as f32);
-        
-        output
-    }
-
     pub fn encode_wav_to_opus(&self, input_path: &str, output_path: &str) -> Result<(), Box<dyn std::error::Error>> {
         // Read the WAV file
         let mut reader = hound::WavReader::open(input_path)?;
@@ -121,7 +96,10 @@ impl OpusEncoder {
         println!("  Total frames: {}", samples_i16.len() / 960);
 
         let file = BufWriter::new(File::create(output_path)?);
-        let serial = rand::random();
+        let serial = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_secs() as u32;
         let mut packet_writer = PacketWriter::new(file);
 
         // Opus header
@@ -193,4 +171,4 @@ impl OpusEncoder {
 
         Ok(())
     }
-} 
+}

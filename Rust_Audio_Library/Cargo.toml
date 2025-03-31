@@ -1,18 +1,17 @@
 [package]
-name = "rustic_audio"
-version = "0.1.5"
-edition = "2025"
+name = "rustic_audio_tool"
+version = "0.0.1"
+edition = "2021"
 
 [dependencies]
 cpal = "0.15.2"
 hound = "3.5.1"
 rustfft = "6.1.0"
 realfft = "3.3.0"
-rand = "0.8"
 audiopus = "0.3.0-rc.0"
 ogg = "0.8.0"
 opus = "0.3.0"
 
 [lib]
-name = "rustio"        # Optional: Name of the library
-path = "src/lib.rs"    # Optional: Path to the library file (default is src/lib.rs)
+name = "rustic_audio_tool"
+path = "src/lib.rs"
