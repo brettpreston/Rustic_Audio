@@ -1804,8 +1804,8 @@ dependencies = [
 ]
 
 [[package]]
-name = "rustio"
-version = "0.1.0"
+name = "rustic_audio"
+version = "0.1.5"
 dependencies = [
  "audiopus",
  "cpal",
