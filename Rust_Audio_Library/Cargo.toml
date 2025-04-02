@@ -1,6 +1,13 @@
 [package]
 name = "rustic_audio_tool"
 version = "0.0.1"
+authors = ["Brett Alexander Preston"]
+description = "Voice Audio Recording, Processing, and Playback"
+license = "GPLv3"
+repository = "https://github.com/brettpreston/Rustic_Audio/tree/main/Rust_Audio_Library"
+readme = "readme.md"
+keywords = ["DSP", "voice", "record", "audio"]
+categories = ["audio", "DSP"]
 edition = "2021"
 
 [dependencies]
