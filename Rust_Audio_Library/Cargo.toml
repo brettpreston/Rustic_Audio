@@ -11,12 +11,25 @@ categories = ["Multimedia"]
 edition = "2021"
 
 [dependencies]
+# Cross-Platform Audio Library
 cpal = "0.15.2"
+
+# Reading and writing WAV audio files
 hound = "3.5.1"
+
+# Fast Fourier Transform
 rustfft = "6.1.0"
+
+# optimized FFT operations for real-valued signals
 realfft = "3.3.0"
+
+# used for encoding audio into the Opus format 
 audiopus = "0.3.0-rc.0"
+
+# reading and writing Ogg container files.
 ogg = "0.8.0"
+
+# used for decoding Opus audio during playback
 opus = "0.3.0"
 
 [lib]
