@@ -267,5 +267,5 @@ The encoder automatically adds the following metadata to the Opus file:
 
 ## License
 
-This project is licensed under the GPLv3 License. See the [LICENSE](LICENSE) file for details.
+This project is licensed under the GPLv3 License. See the LICENSE file for details.
 ```
