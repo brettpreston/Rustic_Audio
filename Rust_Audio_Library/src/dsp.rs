@@ -64,7 +64,7 @@ impl AudioProcessor {
             reader.samples::<i16>().map(|s| s.unwrap() as f32 / 32768.0).collect()
         };
         
-        // Apply RMS normalization if enabled (before other processing)
+        // Apply RMS normalization if enabled
         if self.rms_enabled {
             self.apply_rms_normalization(&mut samples);
         }
@@ -302,7 +302,7 @@ impl AudioProcessor {
         samples.copy_from_slice(&output);
     }
     
-    // New gain boost function
+    // gain boost function
     fn apply_gain_boost(&self, samples: &mut Vec<f32>) {
         let gain_linear = 10.0f32.powf(self.gain_db / 20.0);
         
@@ -311,7 +311,7 @@ impl AudioProcessor {
         }
     }
     
-    // New lookahead limiter function
+    // lookahead limiter function
     fn apply_lookahead_limiter(&self, samples: &mut Vec<f32>) {
         let threshold = 10.0f32.powf(self.limiter_threshold_db / 20.0);
         let lookahead_samples = (self.limiter_lookahead_ms / 1000.0 * self.sample_rate) as usize;
@@ -372,7 +372,7 @@ impl AudioProcessor {
         samples.copy_from_slice(&output);
     }
 
-    // Add the RMS normalization function
+    // The Root Mean Square (RMS) normalization function
     fn apply_rms_normalization(&self, samples: &mut Vec<f32>) {
         // Calculate current RMS
         let rms_current = (samples.iter().map(|&x| x * x).sum::<f32>() / samples.len() as f32).sqrt();

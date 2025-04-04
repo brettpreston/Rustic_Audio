@@ -48,7 +48,7 @@ The DSP effects chain includes the following effects:
    - CMake (for Opus Encoding)
    - ALSA (API for accessing audio devices on Linux)
 
-## Linux Dependencies Installation
+## Linux Debian/Ubuntu-based Dependencies Installation
 ```bash
 sudo apt-get install libasound2-dev pkg-config
 sudo apt-get install libopus-dev

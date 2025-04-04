@@ -26,6 +26,12 @@ Add the following to your `Cargo.toml`:
 rustic_audio_tool = "0.0.1"
 ```
 
+## Linux Debian/Ubuntu-based Dependencies Installation
+```bash
+sudo apt-get install libasound2-dev pkg-config
+sudo apt-get install libopus-dev
+```
+
 ## Usage
 
 ### Creating an Instance
