@@ -6,7 +6,7 @@ description = "Voice Audio Recording, Processing, and Playback"
 license = "GPLv3"
 repository = "https://github.com/brettpreston/Rustic_Audio/tree/main/Rust_Audio_Library"
 readme = "readme.md"
-keywords = ["DSP", "voice", "record", "audio"]
+keywords = ["DSP", "voice", "record", "audio", "clean", "loudness"]
 categories = ["Multimedia"]
 edition = "2021"
 

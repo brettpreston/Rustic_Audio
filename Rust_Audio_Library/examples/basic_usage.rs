@@ -1,7 +1,7 @@
-use rustio::RusticAudio;
+use rustic_audio_tool::RusticAudio;
 
 fn main() {
-    println!("RusticAudio library - Example usage");
+    println!("Rustic_Audio library - Example usage");
     
     // Create a new instance of RusticAudio
     let mut audio = RusticAudio::new();

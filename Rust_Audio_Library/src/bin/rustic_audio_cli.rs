@@ -1,11 +1,11 @@
-use rustio::RusticAudio;
+use rustic_audio_tool::RusticAudio;
 use std::env;
 
 fn main() {
     let args: Vec<String> = env::args().collect();
     
     if args.len() < 2 {
-        println!("Usage: rustio_cli [record|process|play] [file_path]");
+        println!("Usage: rustic_audio_cli [record|process|play] [file_path]");
         return;
     }
     
@@ -63,4 +63,4 @@ fn main() {
         },
         _ => println!("Unknown command: {}", args[1]),
     }
-} 
+}

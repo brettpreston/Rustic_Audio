@@ -122,7 +122,7 @@ impl OpusEncoder {
         // Comment header
         let mut comment_header = Vec::new();
         comment_header.extend_from_slice(b"OpusTags");
-        let vendor = b"rustio";
+        let vendor = b"rustic_audio";
         comment_header.extend_from_slice(&(vendor.len() as u32).to_le_bytes());
         comment_header.extend_from_slice(vendor);
         comment_header.extend_from_slice(&[0, 0, 0, 0]);
