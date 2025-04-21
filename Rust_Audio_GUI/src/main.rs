@@ -22,6 +22,7 @@ struct AudioFileInfo {
     unprocessed_opus_size: u64,
     processed_opus_size: u64,
     last_message: String,
+    loaded_file_path: Option<String>,
 }
 
 struct AudioApp {
@@ -42,6 +43,9 @@ struct AudioApp {
     opus_encoder: OpusEncoder,
     use_low_bitrate: bool,
     use_high_bitrate: bool,
+    processing_thread: Option<thread::JoinHandle<()>>,
+    is_processing: Arc<AtomicBool>,
+    should_cleanup_processing: bool,
 }
 
 impl Default for AudioApp {
@@ -66,11 +70,15 @@ impl Default for AudioApp {
                 unprocessed_opus_size: 0,
                 processed_opus_size: 0,
                 last_message: String::new(),
+                loaded_file_path: None,
             })),
             processor: AudioProcessor::new(44100.0),
             opus_encoder: OpusEncoder::new(),
             use_low_bitrate: false,
             use_high_bitrate: false,
+            processing_thread: None,
+            is_processing: Arc::new(AtomicBool::new(false)),
+            should_cleanup_processing: false,
         }
     }
 }
@@ -339,73 +347,211 @@ impl eframe::App for AudioApp {
                             let playing = self.is_playing.load(Ordering::Relaxed);
                             let playing_original = self.is_playing_original.load(Ordering::Relaxed);
                             let playing_unprocessed_opus = self.is_playing_unprocessed_opus.load(Ordering::Relaxed);
+                            let processing = self.is_processing.load(Ordering::Relaxed);
                             
-                            // Recording button - make it red
-                            if recording {
-                                if ui.add(egui::Button::new("Stop Recording").fill(egui::Color32::from_rgb(200, 60, 60))).clicked() {
-                                    self.is_recording.store(false, Ordering::Relaxed);
-                                    self.should_cleanup_recording = true;
+                            // Recording and Open File buttons in one row
+                            ui.horizontal(|ui| {
+                                // Recording button - make it red
+                                if recording {
+                                    if ui.add(egui::Button::new("Stop Recording").fill(egui::Color32::from_rgb(200, 60, 60))).clicked() {
+                                        self.is_recording.store(false, Ordering::Relaxed);
+                                        self.should_cleanup_recording = true;
+                                    }
+                                } else if !playing && !playing_original && !playing_unprocessed_opus && !processing {
+                                    if ui.add(egui::Button::new("Record").fill(egui::Color32::from_rgb(200, 60, 60))).clicked() {
+                                        let is_recording = Arc::clone(&self.is_recording);
+                                        let audio_info = Arc::clone(&self.audio_info);
+                                        let processor = self.processor.clone();
+                                        let opus_encoder = self.opus_encoder.clone();
+                                        self.is_recording.store(true, Ordering::Relaxed);
+                                        self.recording_thread = Some(thread::spawn(move || {
+                                            if let Ok(_) = record_audio("output.wav", is_recording, processor.clone()) {
+                                                let mut info = audio_info.lock().unwrap();
+                                                info.last_message = "Recording completed successfully".to_string();
+                                                
+                                                // Copy output.wav to original.wav
+                                                if let Err(e) = std::fs::copy("output.wav", "original.wav") {
+                                                    info.last_message = format!("Error copying to original.wav: {:?}", e);
+                                                    return;
+                                                }
+                                                
+                                                // Update original WAV file size
+                                                if let Ok(metadata) = std::fs::metadata("original.wav") {
+                                                    info.original_wav_size = metadata.len();
+                                                }
+                                                
+                                                // Process audio
+                                                let mut processor_instance = processor;
+                                                if let Err(e) = processor_instance.process_file("output.wav", "processed.wav") {
+                                                    info.last_message = format!("Error processing audio: {:?}", e);
+                                                    return;
+                                                }
+                                                
+                                                // Encode to Opus
+                                                if let Err(e) = opus_encoder.encode_wav_to_opus("processed.wav", "processed.opus") {
+                                                    info.last_message = format!("Error encoding to Opus: {:?}", e);
+                                                } else {
+                                                    // Update file info after successful encoding
+                                                    match opus_playback::get_opus_info("processed.opus") {
+                                                        Ok((size, duration)) => {
+                                                            info.file_size = size;
+                                                            info.processed_opus_size = size;
+                                                            info.duration = duration;
+                                                            info.last_message = "Processing and Opus encoding completed successfully".to_string();
+                                                        }
+                                                        Err(e) => {
+                                                            info.last_message = format!("Error getting Opus file info: {:?}", e);
+                                                        }
+                                                    }
+                                                }
+                                                
+                                                // Also encode original to opus for comparison
+                                                if let Err(e) = opus_encoder.encode_wav_to_opus("original.wav", "unprocessed.opus") {
+                                                    info.last_message = format!("Error encoding unprocessed audio: {:?}", e);
+                                                } else {
+                                                    // Update unprocessed opus file size
+                                                    if let Ok(metadata) = std::fs::metadata("unprocessed.opus") {
+                                                        info.unprocessed_opus_size = metadata.len();
+                                                    }
+                                                }
+                                            }
+                                        }));
+                                    }
                                 }
-                            } else if !playing && !playing_original && !playing_unprocessed_opus {
-                                if ui.add(egui::Button::new("Record").fill(egui::Color32::from_rgb(200, 60, 60))).clicked() {
-                                    let is_recording = Arc::clone(&self.is_recording);
-                                    let audio_info = Arc::clone(&self.audio_info);
-                                    let processor = self.processor.clone();
-                                    let opus_encoder = self.opus_encoder.clone();
-                                    self.is_recording.store(true, Ordering::Relaxed);
-                                    self.recording_thread = Some(thread::spawn(move || {
-                                        if let Ok(_) = record_audio("output.wav", is_recording, processor.clone()) {
-                                            let mut info = audio_info.lock().unwrap();
-                                            info.last_message = "Recording completed successfully".to_string();
+                                
+                                // Open File button - make it green
+                                if !recording && !processing {
+                                    if ui.add(egui::Button::new("Open WAV File").fill(egui::Color32::from_rgb(60, 200, 60))).clicked() {
+                                        // Use native file dialog
+                                        if let Some(path) = rfd::FileDialog::new()
+                                            .add_filter("WAV Audio", &["wav"])
+                                            .set_title("Select WAV file to process")
+                                            .pick_file() 
+                                        {
+                                            let path_str = path.to_string_lossy().to_string();
+                                            let path_clone = path_str.clone();
                                             
-                                            // Copy output.wav to original.wav
-                                            if let Err(e) = std::fs::copy("output.wav", "original.wav") {
-                                                info.last_message = format!("Error copying to original.wav: {:?}", e);
-                                                return;
+                                            // Copy file to original.wav
+                                            if let Err(e) = std::fs::copy(&path, "original.wav") {
+                                                let mut info = self.audio_info.lock().unwrap();
+                                                info.last_message = format!("Error copying file: {:?}", e);
+                                            } else {
+                                                let processor = self.processor.clone();
+                                                let opus_encoder = self.opus_encoder.clone();
+                                                let audio_info = Arc::clone(&self.audio_info);
+                                                let is_processing = Arc::clone(&self.is_processing);
+                                                
+                                                self.is_processing.store(true, Ordering::Relaxed);
+                                                self.processing_thread = Some(thread::spawn(move || {
+                                                    // Update original WAV file size
+                                                    if let Ok(metadata) = std::fs::metadata("original.wav") {
+                                                        let mut info = audio_info.lock().unwrap();
+                                                        info.original_wav_size = metadata.len();
+                                                        info.loaded_file_path = Some(path_clone.clone());
+                                                        info.last_message = format!("Opened file: {}", path_clone);
+                                                    }
+                                                    
+                                                    // Process audio
+                                                    let mut processor_instance = processor;
+                                                    if let Err(e) = processor_instance.process_file("original.wav", "processed.wav") {
+                                                        let mut info = audio_info.lock().unwrap();
+                                                        info.last_message = format!("Error processing audio: {:?}", e);
+                                                        is_processing.store(false, Ordering::Relaxed);
+                                                        return;
+                                                    }
+                                                    
+                                                    // Encode to Opus
+                                                    if let Err(e) = opus_encoder.encode_wav_to_opus("processed.wav", "processed.opus") {
+                                                        let mut info = audio_info.lock().unwrap();
+                                                        info.last_message = format!("Error encoding to Opus: {:?}", e);
+                                                    } else {
+                                                        // Update file info after successful encoding
+                                                        match opus_playback::get_opus_info("processed.opus") {
+                                                            Ok((size, duration)) => {
+                                                                let mut info = audio_info.lock().unwrap();
+                                                                info.file_size = size;
+                                                                info.processed_opus_size = size;
+                                                                info.duration = duration;
+                                                                info.last_message = "Processing and Opus encoding completed successfully".to_string();
+                                                            }
+                                                            Err(e) => {
+                                                                let mut info = audio_info.lock().unwrap();
+                                                                info.last_message = format!("Error getting Opus file info: {:?}", e);
+                                                            }
+                                                        }
+                                                    }
+                                                    
+                                                    // Also encode original to opus for comparison
+                                                    if let Err(e) = opus_encoder.encode_wav_to_opus("original.wav", "unprocessed.opus") {
+                                                        let mut info = audio_info.lock().unwrap();
+                                                        info.last_message = format!("Error encoding unprocessed audio: {:?}", e);
+                                                    } else {
+                                                        // Update unprocessed opus file size
+                                                        if let Ok(metadata) = std::fs::metadata("unprocessed.opus") {
+                                                            let mut info = audio_info.lock().unwrap();
+                                                            info.unprocessed_opus_size = metadata.len();
+                                                        }
+                                                    }
+                                                    
+                                                    is_processing.store(false, Ordering::Relaxed);
+                                                }));
                                             }
-                                            
-                                            // Update original WAV file size
-                                            if let Ok(metadata) = std::fs::metadata("original.wav") {
-                                                info.original_wav_size = metadata.len();
-                                            }
-                                            
-                                            // Process audio
+                                        }
+                                    }
+                                }
+                            });
+                            
+                            // Reprocess button
+                            if !recording && !processing {
+                                if ui.add(egui::Button::new("Reprocess with Current Settings").fill(egui::Color32::from_rgb(200, 200, 60))).clicked() {
+                                    // Check if we have an original.wav file to reprocess
+                                    if let Ok(_) = std::fs::metadata("original.wav") {
+                                        let processor = self.processor.clone();
+                                        let opus_encoder = self.opus_encoder.clone();
+                                        let audio_info = Arc::clone(&self.audio_info);
+                                        let is_processing = Arc::clone(&self.is_processing);
+                                        
+                                        self.is_processing.store(true, Ordering::Relaxed);
+                                        self.processing_thread = Some(thread::spawn(move || {
+                                            // Process audio with current settings
                                             let mut processor_instance = processor;
-                                            if let Err(e) = processor_instance.process_file("output.wav", "processed.wav") {
-                                                info.last_message = format!("Error processing audio: {:?}", e);
+                                            if let Err(e) = processor_instance.process_file("original.wav", "processed.wav") {
+                                                let mut info = audio_info.lock().unwrap();
+                                                info.last_message = format!("Error reprocessing audio: {:?}", e);
+                                                is_processing.store(false, Ordering::Relaxed);
                                                 return;
                                             }
                                             
                                             // Encode to Opus
                                             if let Err(e) = opus_encoder.encode_wav_to_opus("processed.wav", "processed.opus") {
+                                                let mut info = audio_info.lock().unwrap();
                                                 info.last_message = format!("Error encoding to Opus: {:?}", e);
                                             } else {
                                                 // Update file info after successful encoding
                                                 match opus_playback::get_opus_info("processed.opus") {
                                                     Ok((size, duration)) => {
+                                                        let mut info = audio_info.lock().unwrap();
                                                         info.file_size = size;
                                                         info.processed_opus_size = size;
                                                         info.duration = duration;
-                                                        info.last_message = "Processing and Opus encoding completed successfully".to_string();
+                                                        info.last_message = "Reprocessing completed successfully".to_string();
                                                     }
                                                     Err(e) => {
+                                                        let mut info = audio_info.lock().unwrap();
                                                         info.last_message = format!("Error getting Opus file info: {:?}", e);
                                                     }
                                                 }
                                             }
                                             
-                                            // Also encode original to opus for comparison
-                                            if let Err(e) = opus_encoder.encode_wav_to_opus("original.wav", "unprocessed.opus") {
-                                                info.last_message = format!("Error encoding unprocessed audio: {:?}", e);
-                                            } else {
-                                                // Update unprocessed opus file size
-                                                if let Ok(metadata) = std::fs::metadata("unprocessed.opus") {
-                                                    info.unprocessed_opus_size = metadata.len();
-                                                }
-                                            }
-                                        }
-                                    }));
+                                            is_processing.store(false, Ordering::Relaxed);
+                                        }));
+                                    } else {
+                                        let mut info = self.audio_info.lock().unwrap();
+                                        info.last_message = "No audio file available to reprocess".to_string();
+                                    }
                                 }
+                            } else if processing {
+                                ui.add(egui::Button::new("Processing...").fill(egui::Color32::from_rgb(150, 150, 150)));
                             }
                             
                             ui.add_space(10.0);
@@ -568,7 +714,8 @@ impl eframe::App for AudioApp {
         if self.is_recording.load(Ordering::Relaxed) || 
            self.is_playing.load(Ordering::Relaxed) || 
            self.is_playing_original.load(Ordering::Relaxed) ||
-           self.is_playing_unprocessed_opus.load(Ordering::Relaxed) {
+           self.is_playing_unprocessed_opus.load(Ordering::Relaxed) ||
+           self.is_processing.load(Ordering::Relaxed) {
             ctx.request_repaint();
         }
 
@@ -578,6 +725,16 @@ impl eframe::App for AudioApp {
                 if thread.is_finished() {
                     let _ = thread.join();
                     self.should_cleanup_playback_unprocessed_opus = false;
+                }
+            }
+        }
+
+        // Handle cleanup for processing thread
+        if self.should_cleanup_processing {
+            if let Some(thread) = self.processing_thread.take() {
+                if thread.is_finished() {
+                    let _ = thread.join();
+                    self.should_cleanup_processing = false;
                 }
             }
         }
