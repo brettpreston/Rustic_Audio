@@ -5,6 +5,30 @@ use std::sync::Arc;
 use std::sync::Mutex;
 use std::error::Error;
 
+// Function to resample audio
+fn resample_audio(input_samples: &[f32], input_rate: f32, output_rate: f32) -> Vec<f32> {
+    let input_duration = input_samples.len() as f32 / input_rate;
+    let output_len = (input_duration * output_rate) as usize;
+    let scale = (input_samples.len() - 1) as f32 / (output_len - 1).max(1) as f32;
+    
+    let mut output = Vec::with_capacity(output_len);
+    for i in 0..output_len {
+        let pos = i as f32 * scale;
+        let index = pos.floor() as usize;
+        let frac = pos - index as f32;
+        
+        let sample = if index + 1 < input_samples.len() {
+            input_samples[index] * (1.0 - frac) + input_samples[index + 1] * frac
+        } else {
+            input_samples[index.min(input_samples.len() - 1)]
+        };
+        
+        output.push(sample);
+    }
+    
+    output
+}
+
 pub fn playback_audio(file_path: &str, is_playing_flag: Arc<AtomicBool>) -> Result<(), Box<dyn Error>> {
     let mut reader = hound::WavReader::open(file_path)?;
     let spec = reader.spec();
@@ -15,22 +39,60 @@ pub fn playback_audio(file_path: &str, is_playing_flag: Arc<AtomicBool>) -> Resu
     let host = cpal::default_host();
     let device = host.default_output_device().expect("No output device available");
     
-    // Use default config instead of matching the file's sample rate
-    let config = device.default_output_config()?;
-    let _sample_format = config.sample_format();
-    let config = config.config();
+    // Get default config for sample format
+    let default_config = device.default_output_config()?;
+    let default_sample_rate = default_config.sample_rate().0;
     
     // Read all samples into memory
-    let samples: Vec<f32> = if spec.sample_format == hound::SampleFormat::Float {
+    let mut samples: Vec<f32> = if spec.sample_format == hound::SampleFormat::Float {
         reader.samples::<f32>().map(|s| s.unwrap()).collect()
     } else {
         reader.samples::<i16>().map(|s| s.unwrap() as f32 / 32768.0).collect()
     };
     
-    // Create Arc before moving into closure
-    let samples_arc = Arc::new(samples);
-    let samples_for_stream = Arc::clone(&samples_arc);
+    // Try to use the WAV file's sample rate
+    let stream_config = cpal::StreamConfig {
+        channels: default_config.channels(),
+        sample_rate: cpal::SampleRate(spec.sample_rate),
+        buffer_size: cpal::BufferSize::Default,
+    };
+    
+    // Try to build the stream with file's sample rate
+    let stream_result = device.build_output_stream(
+        &stream_config,
+        |_: &mut [f32], _: &cpal::OutputCallbackInfo| { /* Empty callback */ },
+        |err| eprintln!("Error initializing stream: {:?}", err),
+        None,
+    );
+    
+    let mut using_original_rate = true;
     let sample_index = Arc::new(Mutex::new(0usize));
+    
+    // If the original sample rate isn't supported, resample to device rate
+    if stream_result.is_err() {
+        println!("WAV sample rate {} not supported by device, resampling to {}", 
+                 spec.sample_rate, default_sample_rate);
+        samples = resample_audio(&samples, spec.sample_rate as f32, default_sample_rate as f32);
+        using_original_rate = false;
+    } else {
+        println!("Using original sample rate: {}", spec.sample_rate);
+    }
+    
+    // Store samples in Arc for thread safety
+    let samples_arc = Arc::new(samples);
+    
+    // Create the actual playback stream with appropriate sample rate
+    let config = if using_original_rate {
+        stream_config
+    } else {
+        cpal::StreamConfig {
+            channels: default_config.channels(),
+            sample_rate: cpal::SampleRate(default_sample_rate),
+            buffer_size: cpal::BufferSize::Default,
+        }
+    };
+    
+    let samples_for_stream = Arc::clone(&samples_arc);
     let sample_index_for_stream = Arc::clone(&sample_index);
     let is_playing_for_stream = Arc::clone(&is_playing_flag);
     

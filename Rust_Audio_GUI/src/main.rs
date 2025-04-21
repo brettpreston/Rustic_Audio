@@ -358,7 +358,7 @@ impl eframe::App for AudioApp {
                                         self.should_cleanup_recording = true;
                                     }
                                 } else if !playing && !playing_original && !playing_unprocessed_opus && !processing {
-                                    if ui.add(egui::Button::new("Record").fill(egui::Color32::from_rgb(200, 60, 60))).clicked() {
+                                    if ui.add(egui::Button::new(egui::RichText::new("Record").color(egui::Color32::BLACK)).fill(egui::Color32::from_rgb(200, 60, 60))).clicked() {
                                         let is_recording = Arc::clone(&self.is_recording);
                                         let audio_info = Arc::clone(&self.audio_info);
                                         let processor = self.processor.clone();
@@ -421,7 +421,7 @@ impl eframe::App for AudioApp {
                                 
                                 // Open File button - make it green
                                 if !recording && !processing {
-                                    if ui.add(egui::Button::new("Open WAV File").fill(egui::Color32::from_rgb(60, 200, 60))).clicked() {
+                                    if ui.add(egui::Button::new(egui::RichText::new("Open").color(egui::Color32::BLACK)).fill(egui::Color32::from_rgb(60, 200, 60))).clicked() {
                                         // Use native file dialog
                                         if let Some(path) = rfd::FileDialog::new()
                                             .add_filter("WAV Audio", &["wav"])
@@ -503,7 +503,7 @@ impl eframe::App for AudioApp {
                             
                             // Reprocess button
                             if !recording && !processing {
-                                if ui.add(egui::Button::new("Reprocess with Current Settings").fill(egui::Color32::from_rgb(200, 200, 60))).clicked() {
+                                if ui.add(egui::Button::new(egui::RichText::new("Reprocess").color(egui::Color32::BLACK)).fill(egui::Color32::from_rgb(255, 255, 0))).clicked() {
                                     // Check if we have an original.wav file to reprocess
                                     if let Ok(_) = std::fs::metadata("original.wav") {
                                         let processor = self.processor.clone();
@@ -551,7 +551,7 @@ impl eframe::App for AudioApp {
                                     }
                                 }
                             } else if processing {
-                                ui.add(egui::Button::new("Processing...").fill(egui::Color32::from_rgb(150, 150, 150)));
+                                ui.add(egui::Button::new(egui::RichText::new("Processing...").color(egui::Color32::BLACK)).fill(egui::Color32::from_rgb(150, 150, 150)));
                             }
                             
                             ui.add_space(10.0);
