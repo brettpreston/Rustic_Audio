@@ -44,8 +44,8 @@ The DSP effects chain includes the following effects:
      - `limiter_lookahead_ms`: Lookahead time in milliseconds (1.0 - 20.0 ms)
 
 ## Dependencies
-   - Audiopus (Opus decoding and playback)
-   - CMake (for Opus Encoding)
+   - Audiopus (Opus Encoding)
+   - CMake (for Audiopus)
    - ALSA (API for accessing audio devices on Linux)
 
 ## Linux Debian/Ubuntu-based Dependencies Installation
