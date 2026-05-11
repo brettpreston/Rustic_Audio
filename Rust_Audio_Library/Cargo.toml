@@ -23,14 +23,11 @@ rustfft = "6.1.0"
 # optimized FFT operations for real-valued signals
 realfft = "3.3.0"
 
-# used for encoding audio into the Opus format 
-audiopus = "0.3.0-rc.0"
+# pure Rust Opus codec
+opus-rs = "0.1.19"
 
 # reading and writing Ogg container files.
 ogg = "0.8.0"
-
-# used for decoding Opus audio during playback
-opus = "0.3.0"
 
 [lib]
 name = "rustic_audio_tool"

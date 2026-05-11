@@ -1,22 +1,16 @@
-use audiopus::{Channels, Application, SampleRate, Bitrate};
 use ogg::{PacketWriter, writing::PacketWriteEndInfo};
+use opus_rs::{Application, OpusEncoder as CodecEncoder};
 use std::fs::File;
 use std::io::BufWriter;
 
 #[derive(Clone)]
 pub struct OpusEncoder {
-    // Remove the unused field if it's not needed
-    // sample_rate: SampleRate,
-    channels: Channels,
     bitrate: i32,
 }
 
 impl OpusEncoder {
     pub fn new() -> Self {
         Self {
-            // Remove from constructor if removed from struct
-            // sample_rate: SampleRate::Hz48000,
-            channels: Channels::Mono,
             bitrate: 12000, // Default 12kbps
         }
     }
@@ -77,23 +71,13 @@ impl OpusEncoder {
             mono_samples
         };
         
-        // Create Opus encoder
-        let mut encoder = audiopus::coder::Encoder::new(
-            SampleRate::Hz48000,
-            self.channels,
-            Application::Audio
-        )?;
-        
-        encoder.set_bitrate(Bitrate::BitsPerSecond(self.bitrate))?;
-        
-        // Convert resampled_samples to i16 for encoding
-        let samples_i16: Vec<i16> = resampled_samples.iter()
-            .map(|&s| (s * 32767.0).round() as i16)
-            .collect();
+        let mut encoder = CodecEncoder::new(48_000, 1, Application::Audio)
+            .map_err(std::io::Error::other)?;
+        encoder.bitrate_bps = self.bitrate;
         
         println!("Converting to Opus:");
         println!("  Frame size: 960 samples (20ms at 48kHz)");
-        println!("  Total frames: {}", samples_i16.len() / 960);
+        println!("  Total frames: {}", resampled_samples.len() / 960);
 
         let file = BufWriter::new(File::create(output_path)?);
         let serial = std::time::SystemTime::now()
@@ -135,18 +119,20 @@ impl OpusEncoder {
         )?;
 
         let frame_size = 960;  // 20ms at 48kHz
-        let mut input_buffer = vec![0i16; frame_size];
+        let mut input_buffer = vec![0.0f32; frame_size];
         let mut encoded_data = vec![0u8; 1275];
         let mut granulepos = 0i64;
 
-        for chunk in samples_i16.chunks(frame_size) {
+        for chunk in resampled_samples.chunks(frame_size) {
             input_buffer.clear();
             input_buffer.extend(chunk);
             if input_buffer.len() < frame_size {
-                input_buffer.resize(frame_size, 0);
+                input_buffer.resize(frame_size, 0.0);
             }
 
-            let encoded_len = encoder.encode(&input_buffer, &mut encoded_data)?;
+            let encoded_len = encoder
+                .encode(&input_buffer, frame_size, &mut encoded_data)
+                .map_err(std::io::Error::other)?;
             let encoded_packet = &encoded_data[..encoded_len];
 
             granulepos += frame_size as i64;

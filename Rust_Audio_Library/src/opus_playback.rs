@@ -1,10 +1,13 @@
-use opus::{Decoder, Channels};
 use ogg::reading::PacketReader;
+use opus_rs::OpusDecoder;
 use std::fs::File;
 use std::io::BufReader;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
+
+const SAMPLE_RATE: u32 = 48_000;
+const FRAME_SIZE: usize = 960;
 
 pub fn get_opus_info(file_path: &str) -> Result<(u64, f64), Box<dyn std::error::Error>> {
     let file = File::open(file_path)?;
@@ -31,7 +34,8 @@ pub fn get_opus_info(file_path: &str) -> Result<(u64, f64), Box<dyn std::error::
 
 pub fn playback_opus(file_path: &str, is_playing_flag: Arc<AtomicBool>) -> Result<(), Box<dyn std::error::Error>> {
     // Create Opus decoder (48kHz is the default for Opus)
-    let decoder = Decoder::new(48000, Channels::Mono)?;
+    let decoder = OpusDecoder::new(SAMPLE_RATE as i32, 1)
+        .map_err(std::io::Error::other)?;
 
     // Open Opus file
     let file = BufReader::new(File::open(file_path)?);
@@ -51,7 +55,7 @@ pub fn playback_opus(file_path: &str, is_playing_flag: Arc<AtomicBool>) -> Resul
     // Force 48kHz output config
     let output_config = cpal::StreamConfig {
         channels: config.channels(),
-        sample_rate: cpal::SampleRate(48000),
+        sample_rate: cpal::SampleRate(SAMPLE_RATE),
         buffer_size: cpal::BufferSize::Default,
     };
 
@@ -62,7 +66,7 @@ pub fn playback_opus(file_path: &str, is_playing_flag: Arc<AtomicBool>) -> Resul
             let is_playing = Arc::clone(&is_playing_flag);
             
             // Create a fixed-size buffer for decoded audio
-            let decoded_buffer = Arc::new(std::sync::Mutex::new(vec![0f32; 960]));
+            let decoded_buffer = Arc::new(std::sync::Mutex::new(vec![0f32; FRAME_SIZE]));
             let decoded_samples = Arc::new(std::sync::Mutex::new(0));
             let buffer_position = Arc::new(std::sync::Mutex::new(0)); // Track position in decoded buffer
 
@@ -89,8 +93,11 @@ pub fn playback_opus(file_path: &str, is_playing_flag: Arc<AtomicBool>) -> Resul
                                     if let Ok(Some(packet)) = reader.read_packet() {
                                         if let Ok(mut decoder) = decoder.lock() {
                                             if let Ok(mut buffer) = decoded_buffer.lock() {
-                                                if let Ok(n_samples) = decoder.decode_float(&packet.data, &mut buffer, false) {
+                                                if let Ok(n_samples) = decoder.decode(&packet.data, FRAME_SIZE, &mut buffer) {
                                                     *decoded_samples.lock().unwrap() = n_samples;
+                                                } else {
+                                                    is_playing.store(false, Ordering::Relaxed);
+                                                    break;
                                                 }
                                             }
                                         }

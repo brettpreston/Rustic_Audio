@@ -46,6 +46,7 @@ struct AudioApp {
     processing_thread: Option<thread::JoinHandle<()>>,
     is_processing: Arc<AtomicBool>,
     should_cleanup_processing: bool,
+    selected_sample_rate: u32,
 }
 
 impl Default for AudioApp {
@@ -79,6 +80,7 @@ impl Default for AudioApp {
             processing_thread: None,
             is_processing: Arc::new(AtomicBool::new(false)),
             should_cleanup_processing: false,
+            selected_sample_rate: 48000,
         }
     }
 }
@@ -302,6 +304,28 @@ impl eframe::App for AudioApp {
                             ui.set_width(panel_width);
                             ui.heading("Opus Encoding Settings");
                             
+                            // Sample rate selection using radio buttons
+                            ui.horizontal(|ui| {
+                                ui.label("Sample Rate:");
+                                ui.horizontal(|ui| {
+                                    if ui.radio_value(&mut self.selected_sample_rate, 8000, "8 kHz").clicked() {
+                                        self.opus_encoder.set_sample_rate(8000);
+                                    }
+                                    if ui.radio_value(&mut self.selected_sample_rate, 12000, "12 kHz").clicked() {
+                                        self.opus_encoder.set_sample_rate(12000);
+                                    }
+                                    if ui.radio_value(&mut self.selected_sample_rate, 16000, "16 kHz").clicked() {
+                                        self.opus_encoder.set_sample_rate(16000);
+                                    }
+                                    if ui.radio_value(&mut self.selected_sample_rate, 24000, "24 kHz").clicked() {
+                                        self.opus_encoder.set_sample_rate(24000);
+                                    }
+                                    if ui.radio_value(&mut self.selected_sample_rate, 48000, "48 kHz").clicked() {
+                                        self.opus_encoder.set_sample_rate(48000);
+                                    }
+                                });
+                            });
+
                             // Add bitrate options with three choices
                             ui.horizontal(|ui| {
                                 ui.label("Bitrate:");
@@ -336,6 +360,7 @@ impl eframe::App for AudioApp {
                             
                             // Show current bitrate
                             ui.label(format!("Current bitrate: {} kbps", self.opus_encoder.get_bitrate() / 1000));
+                            ui.label("PCM is converted to f32 internally before Opus encoding.");
                         });
                         
                         ui.add_space(20.0);
@@ -393,11 +418,14 @@ impl eframe::App for AudioApp {
                                                 } else {
                                                     // Update file info after successful encoding
                                                     match opus_playback::get_opus_info("processed.opus") {
-                                                        Ok((size, duration)) => {
+                                                        Ok((size, duration, file_info)) => {
                                                             info.file_size = size;
                                                             info.processed_opus_size = size;
                                                             info.duration = duration;
-                                                            info.last_message = "Processing and Opus encoding completed successfully".to_string();
+                                                            info.last_message = format!(
+                                                                "Processing and Opus encoding completed successfully ({} kHz Opus)",
+                                                                file_info.get_sample_rate() / 1000
+                                                            );
                                                         }
                                                         Err(e) => {
                                                             info.last_message = format!("Error getting Opus file info: {:?}", e);
@@ -467,12 +495,15 @@ impl eframe::App for AudioApp {
                                                     } else {
                                                         // Update file info after successful encoding
                                                         match opus_playback::get_opus_info("processed.opus") {
-                                                            Ok((size, duration)) => {
+                                                            Ok((size, duration, file_info)) => {
                                                                 let mut info = audio_info.lock().unwrap();
                                                                 info.file_size = size;
                                                                 info.processed_opus_size = size;
                                                                 info.duration = duration;
-                                                                info.last_message = "Processing and Opus encoding completed successfully".to_string();
+                                                                info.last_message = format!(
+                                                                    "Processing and Opus encoding completed successfully ({} kHz Opus)",
+                                                                    file_info.get_sample_rate() / 1000
+                                                                );
                                                             }
                                                             Err(e) => {
                                                                 let mut info = audio_info.lock().unwrap();
@@ -529,12 +560,15 @@ impl eframe::App for AudioApp {
                                             } else {
                                                 // Update file info after successful encoding
                                                 match opus_playback::get_opus_info("processed.opus") {
-                                                    Ok((size, duration)) => {
+                                                    Ok((size, duration, file_info)) => {
                                                         let mut info = audio_info.lock().unwrap();
                                                         info.file_size = size;
                                                         info.processed_opus_size = size;
                                                         info.duration = duration;
-                                                        info.last_message = "Reprocessing completed successfully".to_string();
+                                                        info.last_message = format!(
+                                                            "Processing and Opus encoding completed successfully ({} kHz Opus)",
+                                                            file_info.get_sample_rate() / 1000
+                                                        );
                                                     }
                                                     Err(e) => {
                                                         let mut info = audio_info.lock().unwrap();
