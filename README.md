@@ -39,7 +39,7 @@ The DSP effects chain includes the following effects:
 
 6. **Maximizing Limiter**
     - Pushes peaks above the threshold toward the configured ceiling while never allowing output to exceed that ceiling.
-       - `limiter_threshold_db`: Threshold in dB where maximization begins (-12.0 - 0.0 dB)
+       - `limiter_threshold_db`: Threshold in dB where maximization begins (-64.0 - 0.0 dB)
        - `limiter_ceiling_db`: Final output ceiling in dB (-12.0 - 0.0 dB)
        - `limiter_attack_ms`: Attack time in milliseconds for engaging the maximizer (0.1 - 100.0 ms)
        - `limiter_release_ms`: Release time in milliseconds for relaxing back toward unity (10.0 - 500.0 ms)
