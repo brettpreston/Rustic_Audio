@@ -172,9 +172,11 @@ The `AudioProcessor` provides several configurable DSP settings to control audio
 | `amplitude_release_ms`      | `f32`  | `100.0`       | Release time in milliseconds for the amplitude gate.                        |
 | `amplitude_lookahead_ms`    | `f32`  | `5.0`         | Lookahead time in milliseconds for the amplitude gate.                      |
 | `gain_db`                   | `f32`  | `6.0`         | Gain boost in dB.                                                           |
-| `limiter_threshold_db`      | `f32`  | `-1.0`        | Threshold in dB for the lookahead limiter.                                  |
-| `limiter_release_ms`        | `f32`  | `50.0`        | Release time in milliseconds for the limiter.                               |
-| `limiter_lookahead_ms`      | `f32`  | `5.0`         | Lookahead time in milliseconds for the limiter.                             |
+| `limiter_threshold_db`      | `f32`  | `-1.0`        | Threshold in dB where the maximizing limiter becomes active.                |
+| `limiter_ceiling_db`        | `f32`  | `-2.0`        | Final output ceiling in dB enforced before encoded output.                  |
+| `limiter_attack_ms`         | `f32`  | `5.0`         | Attack time in milliseconds for driving peaks toward the ceiling.           |
+| `limiter_release_ms`        | `f32`  | `50.0`        | Release time in milliseconds for relaxing back toward unity.                |
+| `limiter_lookahead_ms`      | `f32`  | `5.0`         | Lookahead time in milliseconds for the maximizing limiter.                  |
 | `lowpass_freq`              | `f32`  | `20000.0`     | Low-pass filter cutoff frequency in Hz.                                     |
 | `highpass_freq`             | `f32`  | `75.0`        | High-pass filter cutoff frequency in Hz.                                    |
 | `rms_target_db`             | `f32`  | `-20.0`       | Target RMS level in dB for normalization.                                   |

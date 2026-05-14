@@ -37,11 +37,13 @@ The DSP effects chain includes the following effects:
    - Increases the amplitude of the audio signal.
      - `gain_db`: Gain in dB (0.0 - 24.0 dB)
 
-6. **Lookahead Limiter**
-   - Limits the amplitude of the audio signal to prevent clipping.
-     - `limiter_threshold_db`: Threshold in dB (-12.0 - 0.0 dB)
-     - `limiter_release_ms`: Release time in milliseconds (10.0 - 500.0 ms)
-     - `limiter_lookahead_ms`: Lookahead time in milliseconds (1.0 - 20.0 ms)
+6. **Maximizing Limiter**
+    - Pushes peaks above the threshold toward the configured ceiling while never allowing output to exceed that ceiling.
+       - `limiter_threshold_db`: Threshold in dB where maximization begins (-12.0 - 0.0 dB)
+       - `limiter_ceiling_db`: Final output ceiling in dB (-12.0 - 0.0 dB)
+       - `limiter_attack_ms`: Attack time in milliseconds for engaging the maximizer (0.1 - 100.0 ms)
+       - `limiter_release_ms`: Release time in milliseconds for relaxing back toward unity (10.0 - 500.0 ms)
+       - `limiter_lookahead_ms`: Lookahead time in milliseconds (1.0 - 20.0 ms)
 
 ## Dependencies
    - ALSA (API for accessing audio devices on Linux)

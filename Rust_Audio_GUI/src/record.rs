@@ -6,6 +6,8 @@ use std::sync::Mutex;
 use std::error::Error;
 use crate::dsp::AudioProcessor;
 
+const RAW_BASELINE_FILE: &str = "raw_baseline.wav";
+
 pub fn record_audio(file_path: &str, is_recording_flag: Arc<AtomicBool>, processor: AudioProcessor) -> Result<(), Box<dyn Error>> {
     let host = cpal::default_host();
     let device = host.default_input_device().expect("Failed to get default input device");
@@ -17,13 +19,13 @@ pub fn record_audio(file_path: &str, is_recording_flag: Arc<AtomicBool>, process
     let config = config.config();
 
     println!("Recording with: format={:?}, rate={}, channels={}", 
-             sample_format, input_sample_rate.0, channels);
+             sample_format, input_sample_rate, channels);
 
     // Create a temporary file for initial recording
     let temp_file = "temp_recording.wav";
     let spec = hound::WavSpec {
         channels,
-        sample_rate: input_sample_rate.0,
+        sample_rate: input_sample_rate,
         bits_per_sample: 16,
         sample_format: hound::SampleFormat::Int,
     };
@@ -148,8 +150,8 @@ pub fn record_audio(file_path: &str, is_recording_flag: Arc<AtomicBool>, process
         println!("Output file size: {} bytes", metadata.len());
     }
 
-    // Save the original recording first
-    std::fs::copy(temp_file, "original.wav")?;
+    // Preserve the raw capture before inline cleanup so unprocessed Opus stays comparable.
+    std::fs::copy(temp_file, RAW_BASELINE_FILE)?;
     
     // Read the temporary file for processing
     let mut reader = hound::WavReader::open(temp_file)?;

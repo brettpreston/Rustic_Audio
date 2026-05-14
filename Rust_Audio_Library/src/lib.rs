@@ -14,7 +14,7 @@ use crate::opus_playback::playback_opus;
 
 // Keep these re-exports for public use
 pub use crate::dsp::AudioProcessor;
-pub use crate::opus_encoder::OpusEncoder;
+pub use crate::opus_encoder::{OpusEncoder, OpusEncodingMode};
 
 #[derive(Clone)]
 pub struct AudioFileInfo {
@@ -332,6 +332,22 @@ impl RusticAudio {
 
     pub fn get_opus_bitrate(&self) -> i32 {
         self.opus_encoder.get_bitrate()
+    }
+
+    pub fn set_opus_encoding_mode(&mut self, mode: OpusEncodingMode) {
+        self.opus_encoder.set_mode(mode);
+    }
+
+    pub fn get_opus_encoding_mode(&self) -> OpusEncodingMode {
+        self.opus_encoder.get_mode()
+    }
+
+    pub fn set_opus_vbr_quality(&mut self, quality: i32) {
+        self.opus_encoder.set_vbr_quality(quality);
+    }
+
+    pub fn get_opus_vbr_quality(&self) -> i32 {
+        self.opus_encoder.get_vbr_quality()
     }
 
     pub fn process_file(&mut self, input_path: &str, output_path: &str) -> Result<(), Box<dyn std::error::Error>> {

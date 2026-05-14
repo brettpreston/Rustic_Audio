@@ -1,17 +1,17 @@
 [package]
 name = "rustic_audio"
-version = "0.1.6"
+version = "0.1.7"
 edition = "2021"
 
 [dependencies]
-cpal = "0.15.2"
+cpal = "0.17.3"
 hound = "3.5.1"
-eframe = { version = "0.24.1", default-features = false, features = ["default_fonts", "glow"] }
-egui = "0.24.1"
+eframe = { version = "0.34.2", default-features = false, features = ["default_fonts", "glow"] }
+egui = "0.34.2"
 winapi = { version = "0.3.9", features = ["winuser", "windef"] }
-rustfft = "6.1.0"
-realfft = "3.3.0"
-rand = "0.8"
-opus-rs = "0.1.19"
-ogg = "0.8.0"
-rfd = "0.12.1"
+rustfft = "6.4.1"
+realfft = "3.5.0"
+rand = "0.10.1"
+opus-rs = "0.1.20"
+ogg = "0.9.2"
+rfd = "0.17.2"

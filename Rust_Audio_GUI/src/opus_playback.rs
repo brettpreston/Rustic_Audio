@@ -88,7 +88,7 @@ pub fn playback_opus(file_path: &str, is_playing_flag: Arc<AtomicBool>) -> Resul
     // Use the file's sample rate for output
     let output_config = cpal::StreamConfig {
         channels: config.channels(),
-        sample_rate: cpal::SampleRate(sample_rate),
+        sample_rate,
         buffer_size: cpal::BufferSize::Default,
     };
 

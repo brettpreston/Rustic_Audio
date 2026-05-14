@@ -12,7 +12,9 @@ fn main() {
     audio.processor.amplitude_attack_ms = 5.0;           // Attack time for amplitude gate
     audio.processor.amplitude_release_ms = 50.0;         // Release time for amplitude gate
     audio.processor.gain_db = 3.0;                       // Gain boost in dB
-    audio.processor.limiter_threshold_db = -1.0;         // Limiter threshold
+    audio.processor.limiter_threshold_db = -6.0;         // Maximizer activation threshold
+    audio.processor.limiter_ceiling_db = -2.0;           // Maximizer output ceiling
+    audio.processor.limiter_attack_ms = 5.0;             // Maximizer attack time
     audio.processor.limiter_release_ms = 50.0;           // Limiter release time
     audio.processor.lowpass_freq = 20000.0;              // Lowpass filter cutoff frequency
     audio.processor.highpass_freq = 75.0;                // Highpass filter cutoff frequency
@@ -35,6 +37,9 @@ fn main() {
     println!("  Highpass filter: {} Hz", audio.processor.highpass_freq);
     println!("  Lowpass filter: {} Hz", audio.processor.lowpass_freq);
     println!("  RMS target level: {} dB", audio.processor.rms_target_db);
+    println!("  Limiter threshold: {} dB", audio.processor.limiter_threshold_db);
+    println!("  Limiter ceiling: {} dB", audio.processor.limiter_ceiling_db);
+    println!("  Limiter attack: {} ms", audio.processor.limiter_attack_ms);
     println!("  Opus bitrate: {} bps", audio.get_opus_bitrate());
     
     println!("For more examples, see the documentation");

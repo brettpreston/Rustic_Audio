@@ -17,13 +17,13 @@ pub fn record_audio(file_path: &str, is_recording_flag: Arc<AtomicBool>, process
     let config = config.config();
 
     println!("Recording with: format={:?}, rate={}, channels={}", 
-             sample_format, input_sample_rate.0, channels);
+             sample_format, input_sample_rate, channels);
 
     // Create a temporary file for initial recording
     let temp_file = "temp_recording.wav";
     let spec = hound::WavSpec {
         channels,
-        sample_rate: input_sample_rate.0,
+        sample_rate: input_sample_rate,
         bits_per_sample: 16,
         sample_format: hound::SampleFormat::Int,
     };

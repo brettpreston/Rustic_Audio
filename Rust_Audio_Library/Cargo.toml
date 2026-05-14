@@ -1,6 +1,6 @@
 [package]
 name = "rustic_audio_tool"
-version = "0.0.1"
+version = "0.0.2"
 authors = ["Brett Alexander Preston"]
 description = "Voice Audio Recording, Processing, and Playback"
 license = "AGPL-3.0-only"
@@ -12,7 +12,7 @@ edition = "2021"
 
 [dependencies]
 # Cross-Platform Audio Library
-cpal = "0.15.2"
+cpal = "0.17.3"
 
 # Reading and writing WAV audio files
 hound = "3.5.1"
@@ -24,10 +24,10 @@ rustfft = "6.1.0"
 realfft = "3.3.0"
 
 # pure Rust Opus codec
-opus-rs = "0.1.19"
+opus-rs = "0.1.20"
 
 # reading and writing Ogg container files.
-ogg = "0.8.0"
+ogg = "0.9.2"
 
 [lib]
 name = "rustic_audio_tool"

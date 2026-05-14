@@ -12,8 +12,18 @@ use std::sync::Arc;
 use std::thread;
 use std::sync::Mutex;
 use crate::dsp::AudioProcessor;
-use opus_encoder::OpusEncoder;
+use opus_encoder::{OpusEncoder, OpusEncodingMode};
 use opus_playback::playback_opus;
+
+const RAW_BASELINE_FILE: &str = "raw_baseline.wav";
+
+fn unprocessed_source_file() -> &'static str {
+    if std::path::Path::new(RAW_BASELINE_FILE).exists() {
+        RAW_BASELINE_FILE
+    } else {
+        "original.wav"
+    }
+}
 
 struct AudioFileInfo {
     file_size: u64,
@@ -41,8 +51,8 @@ struct AudioApp {
     audio_info: Arc<Mutex<AudioFileInfo>>,
     processor: AudioProcessor,
     opus_encoder: OpusEncoder,
-    use_low_bitrate: bool,
-    use_high_bitrate: bool,
+    opus_encoding_mode: OpusEncodingMode,
+    opus_vbr_quality: i32,
     processing_thread: Option<thread::JoinHandle<()>>,
     is_processing: Arc<AtomicBool>,
     should_cleanup_processing: bool,
@@ -75,8 +85,8 @@ impl Default for AudioApp {
             })),
             processor: AudioProcessor::new(44100.0),
             opus_encoder: OpusEncoder::new(),
-            use_low_bitrate: false,
-            use_high_bitrate: false,
+            opus_encoding_mode: OpusEncodingMode::Cbr,
+            opus_vbr_quality: 5,
             processing_thread: None,
             is_processing: Arc::new(AtomicBool::new(false)),
             should_cleanup_processing: false,
@@ -86,9 +96,10 @@ impl Default for AudioApp {
 }
 
 impl eframe::App for AudioApp {
-    fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+    fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
+        let ctx = ui.ctx().clone();
         // Create a layout with left and right panels
-        egui::CentralPanel::default().show(ctx, |ui| {
+        egui::CentralPanel::default().show_inside(ui, |ui| {
             egui::ScrollArea::vertical().show(ui, |ui| {
                 // Use a horizontal layout with two panels
                 ui.horizontal(|ui| {
@@ -259,7 +270,7 @@ impl eframe::App for AudioApp {
                         ui.group(|ui| {
                             ui.set_width(panel_width);
                             ui.horizontal(|ui| {
-                                ui.heading("Lookahead Limiter");
+                                ui.heading("Maximizing Limiter");
                                 ui.checkbox(&mut self.processor.limiter_enabled, "Enabled");
                             });
                             
@@ -268,8 +279,24 @@ impl eframe::App for AudioApp {
                                     ui.label("Threshold:");
                                     ui.add(egui::Slider::new(
                                         &mut self.processor.limiter_threshold_db,
+                                        -64.0..=0.0
+                                    ).suffix(" dB"));
+                                });
+
+                                ui.horizontal(|ui| {
+                                    ui.label("Ceiling:");
+                                    ui.add(egui::Slider::new(
+                                        &mut self.processor.limiter_ceiling_db,
                                         -12.0..=0.0
                                     ).suffix(" dB"));
+                                });
+
+                                ui.horizontal(|ui| {
+                                    ui.label("Attack:");
+                                    ui.add(egui::Slider::new(
+                                        &mut self.processor.limiter_attack_ms,
+                                        0.1..=100.0
+                                    ).suffix(" ms"));
                                 });
                                 
                                 ui.horizontal(|ui| {
@@ -328,38 +355,69 @@ impl eframe::App for AudioApp {
 
                             // Add bitrate options with three choices
                             ui.horizontal(|ui| {
-                                ui.label("Bitrate:");
+                                ui.label("Mode:");
+                                if ui.radio_value(&mut self.opus_encoding_mode, OpusEncodingMode::Cbr, "CBR (fixed bitrate)").clicked() {
+                                    self.opus_encoder.set_mode(self.opus_encoding_mode);
+                                }
+                                if ui.radio_value(&mut self.opus_encoding_mode, OpusEncodingMode::Vbr, "VBR (quality target)").clicked() {
+                                    self.opus_encoder.set_mode(self.opus_encoding_mode);
+                                }
                             });
-                            
-                            // Use a single variable for bitrate selection
-                            let mut bitrate_option = if self.use_high_bitrate {
-                                0 // 24 kbps
-                            } else if !self.use_low_bitrate {
-                                1 // 12 kbps
-                            } else {
-                                2 // 6 kbps
-                            };
-                            
-                            if ui.radio_value(&mut bitrate_option, 0, "24 kbps (highest quality)").clicked() {
-                                self.use_high_bitrate = true;
-                                self.use_low_bitrate = false;
-                                self.opus_encoder.set_bitrate(24000);
+
+                            self.opus_encoder.set_mode(self.opus_encoding_mode);
+
+                            match self.opus_encoding_mode {
+                                OpusEncodingMode::Cbr => {
+                                    ui.horizontal(|ui| {
+                                        ui.label("Bitrate:");
+                                    });
+
+                                    let mut bitrate_option = match self.opus_encoder.get_bitrate() {
+                                        24000 => 0,
+                                        6000 => 2,
+                                        _ => 1,
+                                    };
+
+                                    if ui.radio_value(&mut bitrate_option, 0, "24 kbps (highest quality)").clicked() {
+                                        self.opus_encoder.set_bitrate(24000);
+                                    }
+
+                                    if ui.radio_value(&mut bitrate_option, 1, "12 kbps (balanced)").clicked() {
+                                        self.opus_encoder.set_bitrate(12000);
+                                    }
+
+                                    if ui.radio_value(&mut bitrate_option, 2, "6 kbps (smallest size)").clicked() {
+                                        self.opus_encoder.set_bitrate(6000);
+                                    }
+                                }
+                                OpusEncodingMode::Vbr => {
+                                    ui.horizontal(|ui| {
+                                        ui.label("Quality:");
+                                        let slider = egui::Slider::new(&mut self.opus_vbr_quality, 0..=10)
+                                            .integer()
+                                            .text("target");
+                                        if ui.add(slider).changed() {
+                                            self.opus_encoder.set_vbr_quality(self.opus_vbr_quality);
+                                        }
+                                    });
+
+                                    self.opus_encoder.set_vbr_quality(self.opus_vbr_quality);
+                                    ui.label(format!("VBR quality target: {} / 10", self.opus_encoder.get_vbr_quality()));
+                                }
                             }
-                            
-                            if ui.radio_value(&mut bitrate_option, 1, "12 kbps (balanced)").clicked() {
-                                self.use_high_bitrate = false;
-                                self.use_low_bitrate = false;
-                                self.opus_encoder.set_bitrate(12000);
+
+                            match self.opus_encoder.get_mode() {
+                                OpusEncodingMode::Cbr => {
+                                    ui.label(format!("Current mode: CBR at {} kbps", self.opus_encoder.get_bitrate() / 1000));
+                                }
+                                OpusEncodingMode::Vbr => {
+                                    ui.label(format!(
+                                        "Current mode: VBR quality {} with {} kbps target",
+                                        self.opus_encoder.get_vbr_quality(),
+                                        self.opus_encoder.get_bitrate() / 1000
+                                    ));
+                                }
                             }
-                            
-                            if ui.radio_value(&mut bitrate_option, 2, "6 kbps (smallest size)").clicked() {
-                                self.use_high_bitrate = false;
-                                self.use_low_bitrate = true;
-                                self.opus_encoder.set_bitrate(6000);
-                            }
-                            
-                            // Show current bitrate
-                            ui.label(format!("Current bitrate: {} kbps", self.opus_encoder.get_bitrate() / 1000));
                             ui.label("PCM is converted to f32 internally before Opus encoding.");
                         });
                         
@@ -394,7 +452,7 @@ impl eframe::App for AudioApp {
                                                 let mut info = audio_info.lock().unwrap();
                                                 info.last_message = "Recording completed successfully".to_string();
                                                 
-                                                // Copy output.wav to original.wav
+                                                // Keep original.wav as the playback source and preserve raw_baseline.wav for fair Opus comparison.
                                                 if let Err(e) = std::fs::copy("output.wav", "original.wav") {
                                                     info.last_message = format!("Error copying to original.wav: {:?}", e);
                                                     return;
@@ -407,7 +465,7 @@ impl eframe::App for AudioApp {
                                                 
                                                 // Process audio
                                                 let mut processor_instance = processor;
-                                                if let Err(e) = processor_instance.process_file("output.wav", "processed.wav") {
+                                                if let Err(e) = processor_instance.process_file("original.wav", "processed.wav") {
                                                     info.last_message = format!("Error processing audio: {:?}", e);
                                                     return;
                                                 }
@@ -434,7 +492,7 @@ impl eframe::App for AudioApp {
                                                 }
                                                 
                                                 // Also encode original to opus for comparison
-                                                if let Err(e) = opus_encoder.encode_wav_to_opus("original.wav", "unprocessed.opus") {
+                                                if let Err(e) = opus_encoder.encode_wav_to_opus(unprocessed_source_file(), "unprocessed.opus") {
                                                     info.last_message = format!("Error encoding unprocessed audio: {:?}", e);
                                                 } else {
                                                     // Update unprocessed opus file size
@@ -463,6 +521,9 @@ impl eframe::App for AudioApp {
                                             if let Err(e) = std::fs::copy(&path, "original.wav") {
                                                 let mut info = self.audio_info.lock().unwrap();
                                                 info.last_message = format!("Error copying file: {:?}", e);
+                                            } else if let Err(e) = std::fs::copy(&path, RAW_BASELINE_FILE) {
+                                                let mut info = self.audio_info.lock().unwrap();
+                                                info.last_message = format!("Error preserving raw baseline: {:?}", e);
                                             } else {
                                                 let processor = self.processor.clone();
                                                 let opus_encoder = self.opus_encoder.clone();
@@ -513,7 +574,7 @@ impl eframe::App for AudioApp {
                                                     }
                                                     
                                                     // Also encode original to opus for comparison
-                                                    if let Err(e) = opus_encoder.encode_wav_to_opus("original.wav", "unprocessed.opus") {
+                                                    if let Err(e) = opus_encoder.encode_wav_to_opus(unprocessed_source_file(), "unprocessed.opus") {
                                                         let mut info = audio_info.lock().unwrap();
                                                         info.last_message = format!("Error encoding unprocessed audio: {:?}", e);
                                                     } else {
@@ -664,7 +725,7 @@ impl eframe::App for AudioApp {
                                         let opus_encoder = self.opus_encoder.clone();
                                         
                                         // Create unprocessed opus file if it doesn't exist
-                                        if let Err(e) = opus_encoder.encode_wav_to_opus("original.wav", "unprocessed.opus") {
+                                        if let Err(e) = opus_encoder.encode_wav_to_opus(unprocessed_source_file(), "unprocessed.opus") {
                                             let mut info = audio_info.lock().unwrap();
                                             info.last_message = format!("Error encoding unprocessed audio: {:?}", e);
                                         } else {
@@ -786,6 +847,6 @@ fn main() {
     eframe::run_native(
         "Rustic_Audio",
         options,
-        Box::new(|_cc| Box::new(AudioApp::default())),
+        Box::new(|_cc| Ok(Box::new(AudioApp::default()))),
     ).unwrap();
 }

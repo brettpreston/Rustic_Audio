@@ -41,7 +41,7 @@ pub fn playback_audio(file_path: &str, is_playing_flag: Arc<AtomicBool>) -> Resu
     
     // Get default config for sample format
     let default_config = device.default_output_config()?;
-    let default_sample_rate = default_config.sample_rate().0;
+    let default_sample_rate = default_config.sample_rate();
     
     // Read all samples into memory
     let mut samples: Vec<f32> = if spec.sample_format == hound::SampleFormat::Float {
@@ -53,7 +53,7 @@ pub fn playback_audio(file_path: &str, is_playing_flag: Arc<AtomicBool>) -> Resu
     // Try to use the WAV file's sample rate
     let stream_config = cpal::StreamConfig {
         channels: default_config.channels(),
-        sample_rate: cpal::SampleRate(spec.sample_rate),
+        sample_rate: spec.sample_rate,
         buffer_size: cpal::BufferSize::Default,
     };
     
@@ -87,7 +87,7 @@ pub fn playback_audio(file_path: &str, is_playing_flag: Arc<AtomicBool>) -> Resu
     } else {
         cpal::StreamConfig {
             channels: default_config.channels(),
-            sample_rate: cpal::SampleRate(default_sample_rate),
+            sample_rate: default_sample_rate,
             buffer_size: cpal::BufferSize::Default,
         }
     };

@@ -3,10 +3,18 @@ use opus_rs::{Application, OpusEncoder as CodecEncoder};
 use std::fs::File;
 use std::io::BufWriter;
 
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub enum OpusEncodingMode {
+    Cbr,
+    Vbr,
+}
+
 #[derive(Clone)]
 pub struct OpusEncoder {
     bitrate: i32,
     sample_rate: u32,
+    mode: OpusEncodingMode,
+    vbr_quality: i32,
 }
 
 impl OpusEncoder {
@@ -14,6 +22,8 @@ impl OpusEncoder {
         Self {
             bitrate: 12000, // Default 12kbps
             sample_rate: 48000,
+            mode: OpusEncodingMode::Cbr,
+            vbr_quality: 5,
         }
     }
 
@@ -29,6 +39,22 @@ impl OpusEncoder {
         self.bitrate
     }
 
+    pub fn set_mode(&mut self, mode: OpusEncodingMode) {
+        self.mode = mode;
+    }
+
+    pub fn get_mode(&self) -> OpusEncodingMode {
+        self.mode
+    }
+
+    pub fn set_vbr_quality(&mut self, quality: i32) {
+        self.vbr_quality = quality.clamp(0, 10);
+    }
+
+    pub fn get_vbr_quality(&self) -> i32 {
+        self.vbr_quality
+    }
+
     fn validate_settings(&self) -> Result<(), Box<dyn std::error::Error>> {
         if !matches!(self.sample_rate, 8000 | 12000 | 16000 | 24000 | 48000) {
             return Err("Invalid sample rate. Must be 8kHz, 12kHz, 16kHz, 24kHz, or 48kHz".into());
@@ -36,6 +62,10 @@ impl OpusEncoder {
 
         if self.bitrate < 6000 || self.bitrate > 510000 {
             return Err("Invalid bitrate. Must be between 6kbps and 510kbps".into());
+        }
+
+        if !(0..=10).contains(&self.vbr_quality) {
+            return Err("Invalid VBR quality. Must be between 0 and 10".into());
         }
 
         Ok(())
@@ -100,8 +130,13 @@ impl OpusEncoder {
         let mut encoder = CodecEncoder::new(self.sample_rate as i32, 1, Application::Audio)
             .map_err(std::io::Error::other)?;
         encoder.bitrate_bps = self.bitrate;
+        encoder.use_cbr = matches!(self.mode, OpusEncodingMode::Cbr);
+        encoder.complexity = self.vbr_quality;
         
         println!("Converting to Opus:");
+        println!("  Mode: {:?}", self.mode_name());
+        println!("  Bitrate target: {} bps", self.bitrate);
+        println!("  VBR quality: {}", self.vbr_quality);
         println!("  Frame size: {} samples (20ms)", frame_size);
         println!("  Total frames: {}", resampled_samples.len() / frame_size);
 
@@ -123,7 +158,7 @@ impl OpusEncoder {
         id_header.push(0);  // Channel mapping family
 
         packet_writer.write_packet(
-            id_header.into(),
+            id_header,
             serial,
             PacketWriteEndInfo::EndPage,
             0
@@ -138,7 +173,7 @@ impl OpusEncoder {
         comment_header.extend_from_slice(&[0, 0, 0, 0]);
 
         packet_writer.write_packet(
-            comment_header.into(),
+            comment_header,
             serial,
             PacketWriteEndInfo::EndPage,
             0
@@ -163,7 +198,7 @@ impl OpusEncoder {
             granulepos += frame_size as i64;
 
             packet_writer.write_packet(
-                encoded_packet.to_vec().into(),
+                encoded_packet.to_vec(),
                 serial,
                 PacketWriteEndInfo::NormalPacket,
                 granulepos as u64
@@ -171,7 +206,7 @@ impl OpusEncoder {
         }
 
         packet_writer.write_packet(
-            Vec::new().into(),
+            Vec::<u8>::new(),
             serial,
             PacketWriteEndInfo::EndStream,
             granulepos as u64
@@ -181,5 +216,12 @@ impl OpusEncoder {
         println!("Final Opus duration: {} seconds", final_duration);
 
         Ok(())
+    }
+
+    fn mode_name(&self) -> &'static str {
+        match self.mode {
+            OpusEncodingMode::Cbr => "CBR",
+            OpusEncodingMode::Vbr => "VBR",
+        }
     }
 }

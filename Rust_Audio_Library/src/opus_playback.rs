@@ -55,7 +55,7 @@ pub fn playback_opus(file_path: &str, is_playing_flag: Arc<AtomicBool>) -> Resul
     // Force 48kHz output config
     let output_config = cpal::StreamConfig {
         channels: config.channels(),
-        sample_rate: cpal::SampleRate(SAMPLE_RATE),
+        sample_rate: SAMPLE_RATE,
         buffer_size: cpal::BufferSize::Default,
     };
 

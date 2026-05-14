@@ -13,6 +13,8 @@ pub struct AudioProcessor {
     pub amplitude_lookahead_ms: f32,
     pub gain_db: f32,
     pub limiter_threshold_db: f32,
+    pub limiter_ceiling_db: f32,
+    pub limiter_attack_ms: f32,
     pub limiter_release_ms: f32,
     pub limiter_lookahead_ms: f32,
     pub lowpass_freq: f32,
@@ -30,22 +32,24 @@ impl AudioProcessor {
     pub fn new(sample_rate: f32) -> Self {
         Self {
             sample_rate,
-            threshold_db: 5.0,
+            threshold_db: 1.0,
             amplitude_threshold_db: -20.0,
             amplitude_attack_ms: 10.0,
             amplitude_release_ms: 100.0,
             amplitude_lookahead_ms: 5.0,
             gain_db: 6.0,
-            limiter_threshold_db: -1.0,
+            limiter_threshold_db: -12.0,
+            limiter_ceiling_db: -2.0,
+            limiter_attack_ms: 5.0,
             limiter_release_ms: 50.0,
             limiter_lookahead_ms: 5.0,
             lowpass_freq: 20000.0,
             highpass_freq: 75.0,
             rms_target_db: -20.0,
-            rms_enabled: true,
-            filters_enabled: true,
-            spectral_gate_enabled: true,
-            amplitude_gate_enabled: true,
+            rms_enabled: false,
+            filters_enabled: false,
+            spectral_gate_enabled: false,
+            amplitude_gate_enabled: false,
             gain_boost_enabled: false,
             limiter_enabled: true,
         }
@@ -314,11 +318,14 @@ impl AudioProcessor {
     // lookahead limiter function
     fn apply_lookahead_limiter(&self, samples: &mut Vec<f32>) {
         let threshold = 10.0f32.powf(self.limiter_threshold_db / 20.0);
+        let ceiling = 10.0f32.powf(self.limiter_ceiling_db / 20.0);
         let lookahead_samples = (self.limiter_lookahead_ms / 1000.0 * self.sample_rate) as usize;
+        let attack_samples = (self.limiter_attack_ms / 1000.0 * self.sample_rate).max(1.0);
+        let attack_coef = (-2.2 / attack_samples).exp();
         let release_coef = (-2.2 / (self.limiter_release_ms / 1000.0 * self.sample_rate)).exp();
         
         let mut lookahead_buffer = VecDeque::with_capacity(lookahead_samples + 1);
-        let mut gain_reduction = 1.0;
+        let mut limiter_gain = 1.0f32;
         
         let mut output = vec![0.0; samples.len()];  // Initialize with correct size
         let mut output_idx = 0;
@@ -336,24 +343,26 @@ impl AudioProcessor {
             // Find peak in lookahead window
             let peak = lookahead_buffer.iter().map(|&s| s.abs()).fold(0.0, f32::max);
             
-            // Calculate target gain reduction
+            // When the lookahead peak crosses threshold, target the ceiling.
             let target_gain = if peak > threshold {
-                threshold / peak
+                ceiling / peak
             } else {
                 1.0
             };
             
-            // Apply release time (smoothing)
-            if target_gain < gain_reduction {
-                gain_reduction = target_gain; // Attack is instant
+            // Use attack when moving farther away from unity, release when relaxing.
+            let current_distance = (limiter_gain - 1.0).abs();
+            let target_distance = (target_gain - 1.0).abs();
+            if target_distance >= current_distance {
+                limiter_gain = limiter_gain * attack_coef + target_gain * (1.0 - attack_coef);
             } else {
-                gain_reduction = gain_reduction * release_coef + target_gain * (1.0 - release_coef);
+                limiter_gain = limiter_gain * release_coef + target_gain * (1.0 - release_coef);
             }
             
             // Apply gain reduction to the oldest sample in buffer
             if let Some(oldest_sample) = lookahead_buffer.pop_front() {
                 if output_idx < output.len() {
-                    output[output_idx] = oldest_sample * gain_reduction;
+                    output[output_idx] = (oldest_sample * limiter_gain).clamp(-ceiling, ceiling);
                     output_idx += 1;
                 }
             }
@@ -362,7 +371,7 @@ impl AudioProcessor {
         // Process remaining samples in buffer
         while !lookahead_buffer.is_empty() && output_idx < output.len() {
             if let Some(oldest_sample) = lookahead_buffer.pop_front() {
-                output[output_idx] = oldest_sample * gain_reduction;
+                output[output_idx] = (oldest_sample * limiter_gain).clamp(-ceiling, ceiling);
                 output_idx += 1;
             }
         }
@@ -431,5 +440,77 @@ impl AudioProcessor {
 impl Default for AudioProcessor {
     fn default() -> Self {
         Self::new(48000.0) 
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::AudioProcessor;
+
+    fn peak(samples: &[f32]) -> f32 {
+        samples.iter().map(|sample| sample.abs()).fold(0.0, f32::max)
+    }
+
+    fn configured_processor() -> AudioProcessor {
+        let mut processor = AudioProcessor::new(48_000.0);
+        processor.limiter_threshold_db = -12.0;
+        processor.limiter_ceiling_db = -2.0;
+        processor.limiter_attack_ms = 0.1;
+        processor.limiter_release_ms = 10.0;
+        processor.limiter_lookahead_ms = 1.0;
+        processor
+    }
+
+    #[test]
+    fn limiter_keeps_below_threshold_audio_unchanged() {
+        let processor = configured_processor();
+        let input_level = 0.2;
+        let mut samples = vec![input_level; 4096];
+
+        processor.apply_lookahead_limiter(&mut samples);
+
+        let settled_peak = peak(&samples[1024..]);
+        assert!((settled_peak - input_level).abs() < 1e-3);
+    }
+
+    #[test]
+    fn limiter_boosts_over_threshold_audio_toward_ceiling() {
+        let processor = configured_processor();
+        let mut samples = vec![0.4; 4096];
+
+        processor.apply_lookahead_limiter(&mut samples);
+
+        let ceiling = 10.0f32.powf(processor.limiter_ceiling_db / 20.0);
+        let settled_peak = peak(&samples[1024..]);
+        assert!(settled_peak > 0.7);
+        assert!(settled_peak <= ceiling + 1e-4);
+    }
+
+    #[test]
+    fn limiter_attentuates_over_ceiling_audio_to_ceiling() {
+        let processor = configured_processor();
+        let mut samples = vec![0.95; 4096];
+
+        processor.apply_lookahead_limiter(&mut samples);
+
+        let ceiling = 10.0f32.powf(processor.limiter_ceiling_db / 20.0);
+        let settled_peak = peak(&samples[1024..]);
+        assert!(settled_peak > 0.7);
+        assert!(settled_peak <= ceiling + 1e-4);
+    }
+
+    #[test]
+    fn limiter_attack_smooths_boost_toward_ceiling() {
+        let mut processor = configured_processor();
+        processor.limiter_attack_ms = 5.0;
+        let mut samples = vec![0.4; 4096];
+
+        processor.apply_lookahead_limiter(&mut samples);
+
+        let ceiling = 10.0f32.powf(processor.limiter_ceiling_db / 20.0);
+        let early_peak = peak(&samples[48..256]);
+        let settled_peak = peak(&samples[1024..]);
+        assert!(early_peak < settled_peak);
+        assert!(settled_peak <= ceiling + 1e-4);
     }
 }

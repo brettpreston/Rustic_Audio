@@ -13,6 +13,8 @@ pub struct AudioProcessor {
     pub amplitude_lookahead_ms: f32,
     pub gain_db: f32,
     pub limiter_threshold_db: f32,
+    pub limiter_ceiling_db: f32,
+    pub limiter_attack_ms: f32,
     pub limiter_release_ms: f32,
     pub limiter_lookahead_ms: f32,
     pub lowpass_freq: f32,
@@ -37,6 +39,8 @@ impl AudioProcessor {
             amplitude_lookahead_ms: 5.0,
             gain_db: 6.0,
             limiter_threshold_db: -1.0,
+            limiter_ceiling_db: -2.0,
+            limiter_attack_ms: 5.0,
             limiter_release_ms: 50.0,
             limiter_lookahead_ms: 5.0,
             lowpass_freq: 20000.0,
@@ -314,11 +318,14 @@ impl AudioProcessor {
     // New lookahead limiter function
     fn apply_lookahead_limiter(&self, samples: &mut Vec<f32>) {
         let threshold = 10.0f32.powf(self.limiter_threshold_db / 20.0);
+        let ceiling = 10.0f32.powf(self.limiter_ceiling_db / 20.0);
         let lookahead_samples = (self.limiter_lookahead_ms / 1000.0 * self.sample_rate) as usize;
+        let attack_samples = (self.limiter_attack_ms / 1000.0 * self.sample_rate).max(1.0);
+        let attack_coef = (-2.2 / attack_samples).exp();
         let release_coef = (-2.2 / (self.limiter_release_ms / 1000.0 * self.sample_rate)).exp();
         
         let mut lookahead_buffer = VecDeque::with_capacity(lookahead_samples + 1);
-        let mut gain_reduction = 1.0;
+        let mut limiter_gain = 1.0f32;
         
         let mut output = vec![0.0; samples.len()];  // Initialize with correct size
         let mut output_idx = 0;
@@ -336,24 +343,26 @@ impl AudioProcessor {
             // Find peak in lookahead window
             let peak = lookahead_buffer.iter().map(|&s| s.abs()).fold(0.0, f32::max);
             
-            // Calculate target gain reduction
+            // When the lookahead peak crosses threshold, target the ceiling.
             let target_gain = if peak > threshold {
-                threshold / peak
+                ceiling / peak
             } else {
                 1.0
             };
             
-            // Apply release time (smoothing)
-            if target_gain < gain_reduction {
-                gain_reduction = target_gain; // Attack is instant
+            // Use attack when moving farther away from unity, release when relaxing.
+            let current_distance = (limiter_gain - 1.0).abs();
+            let target_distance = (target_gain - 1.0).abs();
+            if target_distance >= current_distance {
+                limiter_gain = limiter_gain * attack_coef + target_gain * (1.0 - attack_coef);
             } else {
-                gain_reduction = gain_reduction * release_coef + target_gain * (1.0 - release_coef);
+                limiter_gain = limiter_gain * release_coef + target_gain * (1.0 - release_coef);
             }
             
             // Apply gain reduction to the oldest sample in buffer
             if let Some(oldest_sample) = lookahead_buffer.pop_front() {
                 if output_idx < output.len() {
-                    output[output_idx] = oldest_sample * gain_reduction;
+                    output[output_idx] = (oldest_sample * limiter_gain).clamp(-ceiling, ceiling);
                     output_idx += 1;
                 }
             }
@@ -362,7 +371,7 @@ impl AudioProcessor {
         // Process remaining samples in buffer
         while !lookahead_buffer.is_empty() && output_idx < output.len() {
             if let Some(oldest_sample) = lookahead_buffer.pop_front() {
-                output[output_idx] = oldest_sample * gain_reduction;
+                output[output_idx] = (oldest_sample * limiter_gain).clamp(-ceiling, ceiling);
                 output_idx += 1;
             }
         }
